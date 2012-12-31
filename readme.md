@@ -84,7 +84,7 @@ When the parsing succeeded, *seq* returns a State object contains the value retu
 
 ## Sample Code
 
-Here is a four arithmetic operations calculator sample code. 
+Here is a sample of four arithmetic operations calculator. 
 
     var tok_number = map(parseFloat, regexp(/^\s*[-+]?\d+(\.\d+)?\s*/));
     var tok_plus  = regexp(/^\s*\+\s*/);
