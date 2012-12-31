@@ -1,4 +1,4 @@
-
+--sourcemap
 --target ES5
 parsect.ts
 globals.ts

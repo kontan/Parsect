@@ -228,3 +228,4 @@ var Parsect;
     Parsect.number = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
     Parsect.spaces = regexp(/^\w*/);
 })(Parsect || (Parsect = {}));
+//@ sourceMappingURL=parsect.js.map

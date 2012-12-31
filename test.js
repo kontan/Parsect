@@ -35,3 +35,4 @@ console.log("many1Test " + many1Test.parse(new Source("aaaaaaa", 0)).value);
 console.log("numberTest" + number.parse(new Source("-123.567", 0)).value);
 var orTest = many(or(string("a"), string("b")));
 console.log("orTest " + orTest.parse(new Source("baabbabaabbbazaabb", 0)).value);
+//@ sourceMappingURL=test.js.map
