@@ -29,17 +29,12 @@ var term = seq(function (s) {
         return v / t;
     }))));
 });
-var factor = choice(function (c) {
-    c(seq(function (s) {
-        s(tok_left);
-        var v = s(expr);
-        s(tok_right);
-        s(ret(function () {
-            return v;
-        }));
-    }));
-    c(tok_number);
-});
+var factor = or(seq(function (s) {
+    s(tok_left);
+    var v = s(expr);
+    s(tok_right);
+    return v;
+}), tok_number);
 console.log("test expr: ");
 console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);
 console.log("test div: 12/2= ");

@@ -129,15 +129,15 @@ Here is a sample of four arithmetic operations calculator.
     });
     
     // factor := "(" expr ")"  |  number
-    var factor = choice((c)=>{
-        c(seq((s)=>{
+    var factor = or(
+        seq((s)=>{
             s(tok_left);                
             var v = s(expr);
             s(tok_right);
-            s(ret(()=>v));
-        }));
-        c(tok_number);
-    });
+            return v;
+        }),
+        tok_number
+    );
     
     console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);    
 
