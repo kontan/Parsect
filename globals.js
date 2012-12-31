@@ -12,4 +12,3 @@ var count = Parsect.count;
 var map = Parsect.map;
 var series = Parsect.series;
 var or = Parsect.or;
-//@ sourceMappingURL=globals.js.map

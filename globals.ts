@@ -1,3 +1,6 @@
+// Parsect (https://github.com/kontan/Parsect)
+// @author Kon - http://phyzkit.net/
+
 /// <reference path="parsect.ts" />
 
 var Source = Parsect.Source;

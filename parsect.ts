@@ -1,3 +1,5 @@
+// Parsect (https://github.com/kontan/Parsect)
+// @author Kon - http://phyzkit.net/
 
 module Parsect{
 

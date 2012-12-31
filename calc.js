@@ -8,11 +8,11 @@ var tok_right = regexp(/^\s*\)\s*/);
 var expr = seq(function (s) {
     var v = s(term);
     s(option(v, or(seq(function (s) {
-        var op = s(tok_plus);
+        s(tok_plus);
         var e = s(expr);
         return v + e;
     }), seq(function (s) {
-        var op = s(tok_minus);
+        s(tok_minus);
         var e = s(expr);
         return v - e;
     }))));
@@ -20,11 +20,11 @@ var expr = seq(function (s) {
 var term = seq(function (s) {
     var v = s(factor);
     s(option(v, or(seq(function (s) {
-        var op = s(tok_mul);
+        s(tok_mul);
         var t = s(term);
         return v * t;
     }), seq(function (s) {
-        var op = s(tok_div);
+        s(tok_div);
         var t = s(term);
         return v / t;
     }))));
@@ -40,10 +40,10 @@ var factor = choice(function (c) {
     }));
     c(tok_number);
 });
+console.log("test expr: ");
+console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);
 console.log("test div: 12/2= ");
 console.log(expr.parse(new Source("12/2", 0)).value);
-console.log("test expr: ");
-console.log(expr.parse(new Source("(-1.5+1.5)*2", 0)).value);
 console.log("test number: ");
 console.log(many(number).parse(new Source("-123.56+34-33.3", 0)).value);
 var exprInput = document.querySelector("#expression");
@@ -61,4 +61,3 @@ var update = function () {
 };
 exprInput.addEventListener("change", update);
 exprInput.addEventListener("keydown", update);
-//@ sourceMappingURL=calc.js.map
