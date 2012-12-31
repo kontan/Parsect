@@ -222,39 +222,6 @@ module Parsect{
 		});
 	}
 
-
-
-
-	/*
-	var digit:()=>Parser = ()=>satisfy((c)=>"0123456789".indexOf(c)>=0);
-	var natural:()=>Parser = ()=>seq((s)=>{
-		var digits = s(many1(digit()));
-		s(ret(()=>digits.join("")));
-	});
-	var intStr:()=>Parser = ()=>seq((s)=>{
-		var sign   = s(option("", string("-")));
-		var digits = s(natural());
-		s(ret(()=>sign + digits));
-	});
-	var floatStr:()=>Parser = ()=>seq((s)=>{
-		var sign   = s(option("", choice((c)=>{
-			c(string("-"));
-			c(string("+"));
-		})));
-		var intStr = s(natural());
-		var radix = "";
-		s(option("", seq((s)=>{
-			s(string("."));
-			radix = "." + s(natural());
-		})));
-		s(ret(()=> sign + intStr + radix));
-	});
-	var number :()=>Parser = ()=>seq((s)=>{
-		var n = s(floatStr());
-		s(ret(()=>parseFloat(n)));
-	});
-	*/
-
 	export var number:Parser = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
 	export var spaces:Parser = regexp(/^\w*/);
 }
