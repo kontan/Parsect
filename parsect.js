@@ -35,28 +35,6 @@ var Parsect;
         return Source;
     })();
     Parsect.Source = Source;    
-    function choice(f) {
-        return new Parser("choice", function (source) {
-            var choicedState = undefined;
-            var c = function (p) {
-                if(choicedState === undefined) {
-                    var result = p.parse(source);
-                    if(result.isSuccessed()) {
-                        choicedState = result;
-                        (c).result = result.value.toString().slice(0, 16);
-                        (c).success = true;
-                        return result.value;
-                    }
-                }
-                return undefined;
-            };
-            (c).source = source.source.slice(source.position, 10);
-            (c).success = false;
-            f(c);
-            return choicedState !== undefined ? choicedState : new State(undefined, source, false);
-        });
-    }
-    Parsect.choice = choice;
     function seq(f) {
         return new Parser("seq", function (source) {
             var currentState = new State(undefined, source, true);
@@ -214,6 +192,10 @@ var Parsect;
         });
     }
     Parsect.option = option;
+    function optional(p) {
+        return new Parser("optional", option(undefined, p).parse);
+    }
+    Parsect.optional = optional;
     function map(f, p) {
         return new Parser("map(" + p.name + ")", function (source) {
             var _st = p.parse(source);

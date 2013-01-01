@@ -3,7 +3,6 @@ var string = Parsect.string;
 var regexp = Parsect.regexp;
 var ret = Parsect.ret;
 var seq = Parsect.seq;
-var choice = Parsect.choice;
 var number = Parsect.number;
 var many = Parsect.many;
 var many1 = Parsect.many1;

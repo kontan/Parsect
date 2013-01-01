@@ -27,30 +27,6 @@ module Parsect{
 		}
 	}
 
-	export function choice(f:(c:(p:Parser)=>any)=>void):Parser{
-		return new Parser("choice", (source:Source)=>{
-			var choicedState:State = undefined;
-			var c = (p:Parser)=>{
-				if(choicedState === undefined){
-					var result:State = p.parse(source);
-					if(result.isSuccessed()){
-						choicedState = result;
-						(<any>c).result = result.value.toString().slice(0, 16);
-						(<any>c).success = true;
-						return result.value;
-					}
-				}
-				return undefined;
-			};
-			(<any>c).source  = source.source.slice(source.position, 10);
-			(<any>c).success = false;
-			f(c);
-			return choicedState !== undefined ? choicedState : new State(undefined, source, false);
-		});
-	}
-
-
-
 	export function seq(f:(s:(p:Parser)=>any)=>any):Parser{
 		return new Parser("seq", (source:Source)=>{
 			var currentState:State = new State(undefined, source, true);
@@ -211,6 +187,10 @@ module Parsect{
 				return new State(defaultValue, source, true);
 			}
 		});
+	}
+
+	export function optional(p:Parser):Parser{
+		return new Parser("optional", option(undefined, p).parse);
 	}
 
 	export function map(f:(v:any)=>any, p:Parser){
