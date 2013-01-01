@@ -9,13 +9,10 @@ module Parsect{
 	}
 
 	export class State{ 
-		constructor(public value:any, public source:Source, private success:bool=true){
+		constructor(public value:any, public source:Source, public success:bool=true){
 		} 
 		fail():State{
 			return new State(this.value, this.source, false);
-		}
-		isSuccessed():bool{
-			return this.success;
 		}
 	}
 
@@ -27,25 +24,33 @@ module Parsect{
 		}
 	}
 
+	interface Context{
+		(p:Parser):any;
+		(s:string):string;
+		source:string;	// for debugging
+		success:bool;   // for debugging
+		result:any;     // for debugging
+	}
+
 	export function seq(f:(s:(p:Parser)=>any)=>any):Parser{
 		return new Parser("seq", (source:Source)=>{
 			var currentState:State = new State(undefined, source, true);
 			var active:bool = true;
-			var s = (p:Parser)=>{
+			var s:Context = <any>(a:any)=>{
+				var p:Parser = a instanceof Parser ? a : string(a);
 				if(active){
 					currentState = p.parse(currentState.source);
-					if(currentState.isSuccessed()){
-						(<any>s).result = currentState.value.toString().slice(0, 16);
+					if(currentState.success){
+						s.result = currentState.value.toString().slice(0, 16);
 						return currentState.value;
-					}else{
-						active = false;
 					}
 				}
+				active = false;
 				s.success = false;
 				return undefined;
 			};
-			(<any>s).source = source.source.slice(source.position, 16);
-			(<any>s).success = true;
+			s.source = source.source.slice(source.position, 16);
+			s.success = true;
 			var returnValue = f(s);
 			return active ? (returnValue !== undefined ? new State(returnValue, currentState.source, true) : currentState) : new State(undefined, source, false);
 		});
@@ -58,13 +63,13 @@ module Parsect{
 			var currentState = new State(undefined, source, true);
 			for(var i = 0; i < ps.length; i++){
 				currentState = ps[i].parse(currentState.source);
-				if(currentState.isSuccessed()){
+				if(currentState.success){
 					return currentState.value;
 				}else{
 					break;
 				}
 			}
-			return currentState.isSuccessed() ? currentState : new State(undefined, source, false);
+			return currentState.success ? currentState : new State(undefined, source, false);
 		});
 	}
 
@@ -80,11 +85,7 @@ module Parsect{
 
 	export function regexp(pattern:RegExp):Parser{
 		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
-			
-			//pattern.lastIndex = s.position;
-			//var matches = pattern.exec(s.source.slice(s.position));
 			var matches = pattern.exec(s.source.slice(s.position));
-
 			if(matches && matches.length > 0){
 				var matched = matches[0];
 				return new State(matched, s.progress(matched.length));
@@ -106,7 +107,7 @@ module Parsect{
 			var results = [];
 			for(var i = 0; i < n; i++){
 				st = p.parse(st.source);
-				if(st.isSuccessed()){
+				if(st.success){
 					results.push(st.value);
 				}else{
 					return new State(undefined, s, false);
@@ -122,7 +123,7 @@ module Parsect{
 			var results = [];
 			for(var i = 0; true; i++){
 				st = p.parse(st.source);
-				if(st.isSuccessed()){
+				if(st.success){
 					results.push(st.value);
 				}else{
 					break;
@@ -139,7 +140,7 @@ module Parsect{
 			var i = 0;
 			for(; true; i++){
 				st = p.parse(st.source);
-				if(st.isSuccessed()){
+				if(st.success){
 					results.push(st.value);
 				}else{
 					break;
@@ -158,7 +159,7 @@ module Parsect{
 		return new Parser("or", (source:Source)=>{
 			for(var i = 0; i < ps.length; i++){
 				var _st = ps[i].parse(source);
-				if(_st.isSuccessed()){
+				if(_st.success){
 					return _st;
 				}
 			}
@@ -181,7 +182,7 @@ module Parsect{
 	export function option(defaultValue:any, p:Parser):Parser{
 		return new Parser("option", (source:Source)=>{
 			var _st = p.parse(source);
-			if(_st.isSuccessed()){
+			if(_st.success){
 				return _st;
 			}else{
 				return new State(defaultValue, source, true);
@@ -196,13 +197,42 @@ module Parsect{
 	export function map(f:(v:any)=>any, p:Parser){
 		return new Parser("map(" + p.name + ")", (source:Source)=>{
 			var _st = p.parse(source);
-			if(_st.isSuccessed()){
+			if(_st.success){
 				return new State(f(_st.value), _st.source, true);
 			}else{
 				return _st;
 			}
 		});
 	}
+
+	export var sepBy1 = (p:Parser, sep:Parser)=>new Parser("sepBy1", 
+		seq((s)=>{
+			var x = s(p);
+			var xs = s(many(series(sep, p)));
+			if(xs){
+				xs.unshift(x);
+				return xs;
+			}
+		}).parse
+	);
+
+	export var empty = new Parser("empty", (source:Source)=>new State(undefined, source, true));
+
+	export var sepBy = (p:Parser, sep:Parser)=>new Parser("sepBy", or(sepBy1(p, sep), empty).parse);	
+
+	export var endBy1 = (p:Parser, sep:Parser)=>new Parser("endBy1", (source:Source)=>{
+		var q = seq((s)=>{ var x = s(p); s(sep); return x; });
+		return seq((s)=>{
+			var x = s(q);
+			var xs = s(many(q));
+			if(x){
+				xs.unshift(x);
+				return xs;
+			} 
+		}); 
+	});
+
+	export var endBy = (p:Parser, sep:Parser)=>new Parser("endBy", or(endBy1(p, sep), empty).parse);	
 
 	export var number:Parser = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
 	export var spaces:Parser = regexp(/^\w*/);

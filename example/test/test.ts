@@ -2,15 +2,21 @@
 // @author Kon - http://phyzkit.net/
 
 /// <reference path="parsect.ts" />
+/// <reference path="tester.ts" /> 
+
+var test = new Tester();
+
+test.parse("string 0", string("hoge"), "hoge", 4, "hoge");
+test.parse("string 1", string("piyo"), "hoge", 0);
 
 var seqTest = seq((s)=>{
 	s(string("("));
 	var e = s(string("a"));
 	s(string(")"));
-	s(ret(()=>e));
+	return e;
 });
 
-console.log("seqTest " + seqTest.parse(new Source("(a)", 0)).value);
+test.parse("seqTest " , seqTest, "(a)", 3, "a");
 
 
 var countTest = count(3, string("a"));
@@ -27,3 +33,8 @@ console.log("numberTest" + number.parse(new Source("-123.567", 0)).value);
 
 var orTest = many(or(string("a"), string("b")));
 console.log("orTest " + orTest.parse(new Source("baabbabaabbbazaabb", 0)).value);
+
+
+
+var span:HTMLElement = <any>document.querySelector("#result");
+span.innerHTML = test.report();

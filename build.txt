@@ -1,6 +1,7 @@
 --sourcemap
 --target ES5
-parsect.ts
-globals.ts
-test.ts
-calc.ts
+src/parsect.ts
+src/globals.ts
+example/test/tester.ts
+example/test/test.ts
+example/calc/calc.ts
