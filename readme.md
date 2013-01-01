@@ -70,7 +70,7 @@ It consumes iteration of number, like "-33+29+0.2+4.4".
     	return v;
     });
 
-This parser parses a numeric string between parenses. *s* function recieves a parser. A return value of *s(number)* is not Parsect.State object but a **raw value** of result of parsing. So, variable *v* is bounded a *number* object. When *p* parses a string "(100)", *v* is "100". 
+This parser parses a numeric string between parenses. *s* function recieves a parser. A return value of *s(number)* is not a Parsect.State object but a **raw value** of result of parsing. So, variable *v* is bounded a *string* object. When *p* parses a string "(100)", *v* is "100". 
 
 If a parser applied to *s* failed, all following parsers would be ignore. 
 
@@ -84,7 +84,7 @@ When the parsing succeeded, *seq* returns a State object contains the value retu
 
 ## Sample Code
 
-Here is a sample of four arithmetic operations calculator. 
+Here is a sample of four arithmetic operations calculator. (To keep it simple, all operators are right-associative.)
 
     var tok_number = map(parseFloat, regexp(/^\s*[-+]?\d+(\.\d+)?\s*/));
     var tok_plus  = regexp(/^\s*\+\s*/);
@@ -183,6 +183,6 @@ Parsect is licensed under MIT License.
 
 http://phyzkit.net/ 
 
-[@KDKTN](http://twitter.com/KDKTN/) in twitter
+Kon[@KDKTN](http://twitter.com/KDKTN/) in twitter
     
 日本語でもおｋ Japanese also available to contact me.
