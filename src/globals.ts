@@ -17,3 +17,5 @@ var count  = Parsect.count;
 var map    = Parsect.map;
 var series = Parsect.series;
 var or     = Parsect.or;
+var sepBy1 = Parsect.sepBy1;
+var sepBy  = Parsect.sepBy;

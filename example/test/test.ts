@@ -16,25 +16,26 @@ var seqTest = seq((s)=>{
 	return e;
 });
 
-test.parse("seqTest " , seqTest, "(a)", 3, "a");
 
+function join(ss:string[]){
+	return ss.join();
+}
 
-var countTest = count(3, string("a"));
-console.log("countTest " + countTest.parse(new Source("aaa", 0)).value);
+test.parse("seqTest" ,       seqTest,                                       "(a)", 3, "a");
+test.parse("countTest",      map(join, count(3, string("a"))),              "aaa", 3, "a,a,a");
+test.parse("manyTest",       map(join, many(string("a"))),                  "aaaaaaa", 7, "a,a,a,a,a,a,a");
+test.parse("many1Test",      map(join, many1(string("a"))),                 "aaaaaaa", 7, "a,a,a,a,a,a,a");
+test.parse("numberTest",     number,                                        "-123.567", 8, "-123.567");
+test.parse("orTest",         map(join, many(or(string("a"), string("b")))), "baabbabaabbbazaabb", 13, "b,a,a,b,b,a,b,a,a,b,b,b,a");
 
-var manyTest = many(string("a"));
-console.log("manyTest" + manyTest.parse(new Source("aaaaaaa", 0)).value);
+var sepTest = map(join, sepBy1(string("a"), string("_"))); 
+test.parse("sepBy1 2",        sepTest , "a_a_a", 5, "a,a,a");
 
-var many1Test = many1(string("a"));
-console.log("many1Test " + many1Test.parse(new Source("aaaaaaa", 0)).value);
+var sepBy1Test = sepBy1(string("a"), string("_")); 
+test.parse("sepBy1 2",        sepBy1Test , "", 0, undefined, false);
 
-console.log("numberTest" + number.parse(new Source("-123.567", 0)).value);
-
-
-var orTest = many(or(string("a"), string("b")));
-console.log("orTest " + orTest.parse(new Source("baabbabaabbbazaabb", 0)).value);
-
-
+var sepBy_1 = sepBy(string("a"), string("_")); 
+test.parse("sepBy 1",        sepBy_1 , "", 0, undefined, true);
 
 var span:HTMLElement = <any>document.querySelector("#result");
 span.innerHTML = test.report();

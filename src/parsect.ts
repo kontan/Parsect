@@ -60,11 +60,9 @@ module Parsect{
 		var ps:Parser[] = <any>arguments;
 		return new Parser("series", (source:Source)=>{
 			var currentState:State = new State(undefined, source, true);
-			var currentState = new State(undefined, source, true);
 			for(var i = 0; i < ps.length; i++){
 				currentState = ps[i].parse(currentState.source);
 				if(currentState.success){
-					return currentState.value;
 				}else{
 					break;
 				}
