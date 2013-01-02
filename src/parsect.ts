@@ -34,7 +34,7 @@ module Parsect{
 
 
 	// seq :: ((Parser a -> a) -> b) -> Parser b
-	export function seq(f:(s:(p:Parser)=>any)=>any):Parser{
+	export function seq(f:(s:Context)=>any):Parser{
 		return new Parser("seq", (source:Source)=>{
 			var currentState:State = new State(undefined, source, true);
 			var active:bool = true;
@@ -46,6 +46,7 @@ module Parsect{
 						s.result = currentState.value === undefined ? "<undefined>"
 						         : currentState.value === null      ? "<null>"
 						         : currentState.value.toString().slice(0, 16);
+						s.source = currentState.source.source.slice(currentState.source.position, currentState.source.position + 64);        
 						return currentState.value;
 					}
 				}
@@ -53,7 +54,7 @@ module Parsect{
 				s.success = false;
 				return undefined;
 			};
-			s.source = source.source.slice(source.position, 16);
+			s.source = source.source.slice(source.position, source.position + 64);
 			s.success = true;
 			var returnValue = f(s);
 			return active ? (returnValue !== undefined ? new State(returnValue, currentState.source, true) : currentState) : new State(undefined, source, false);
