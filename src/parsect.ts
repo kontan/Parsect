@@ -88,8 +88,11 @@ module Parsect{
 
 	export function regexp(pattern:RegExp):Parser{
 		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
-			var matches = pattern.exec(s.source.slice(s.position));
-			if(matches && matches.length > 0){
+			var input = s.source.slice(s.position);
+			var matches = pattern.exec(input);
+			// In javascript' Regex, ^ matches not only the benning of the input but the beginniing of new line.
+			//  "input.indexOf(matches[0]) == 0" is needed.
+			if(matches && matches.length > 0 && input.indexOf(matches[0]) == 0){
 				var matched = matches[0];
 				return new State(matched, s.progress(matched.length));
 			}else{
