@@ -70,11 +70,11 @@ It consumes iteration of number, like "-33+29+0.2+4.4".
     	return v;
     });
 
-This parser parses a numeric string between parenses. *s* function recieves a parser. A return value of *s(number)* is not a Parsect.State object but a **raw value** of result of parsing. So, variable *v* is bounded a *string* object. When *p* parses a string "(100)", *v* is "100". 
+This parser parses a numeric string between parenses. The argument *s* is a function takes a parser and execute it. A return value of *s(number)* is not a *Parsect.State* object but a **raw value** of result of parsing. So, the variable *v* would be bounded a *string* object. When *p* parses a string "(100)", *v* is "100". 
 
 If a parser applied to *s* failed, all following parsers would be ignore. 
 
-When the parsing succeeded, *seq* returns a State object contains the value returned from the parameter function. Otherwise, the value of state object is *undefined*, regardless of the parameter function returns any value.
+When the parsing succeeded, *seq* returns a State object contains the value returned from the parameter function. Otherwise, the *value* property of the state object is *undefined*, regardless of the parameter function returns any value.
 
 ### *or* combinator
 

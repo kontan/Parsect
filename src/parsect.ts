@@ -17,7 +17,7 @@ module Parsect{
 	}
 
 	export class Source{ 
-		constructor(public source:string, public position:number){		
+		constructor(public source:string, public position?:number = 0){		
 		}
 		progress(delta:number):Source{
 			return new Source(this.source, this.position + delta);
@@ -32,6 +32,8 @@ module Parsect{
 		result:any;     // for debugging
 	}
 
+
+	// seq :: ((Parser a -> a) -> b) -> Parser b
 	export function seq(f:(s:(p:Parser)=>any)=>any):Parser{
 		return new Parser("seq", (source:Source)=>{
 			var currentState:State = new State(undefined, source, true);
@@ -41,7 +43,9 @@ module Parsect{
 				if(active){
 					currentState = p.parse(currentState.source);
 					if(currentState.success){
-						s.result = currentState.value.toString().slice(0, 16);
+						s.result = currentState.value === undefined ? "<undefined>"
+						         : currentState.value === null      ? "<null>"
+						         : currentState.value.toString().slice(0, 16);
 						return currentState.value;
 					}
 				}
@@ -216,7 +220,7 @@ module Parsect{
 
 	export var empty = new Parser("empty", (source:Source)=>new State(undefined, source, true));
 
-	export var sepBy = (p:Parser, sep:Parser)=>new Parser("sepBy", or(sepBy1(p, sep), empty).parse);	
+	export var sepBy = (p:Parser, sep:Parser)=>new Parser("sepBy", or(sepBy1(p, sep), map(()=>[], empty)).parse);	
 
 	export var endBy1 = (p:Parser, sep:Parser)=>new Parser("endBy1", (source:Source)=>{
 		var q = seq((s)=>{ var x = s(p); s(sep); return x; });
