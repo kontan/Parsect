@@ -14,24 +14,25 @@ In the following sample codes, most of identifiers are not prefixed with the mod
 
 ### *number* parsers
 
-Parsect provides some commonly-used parsers. **number** is a parser that parse a numeral strings. **number** is a **Persect.Parser** object and a Parser object has **parse** function in it's property. *parse* takes a string parameter as input. So following code parses numeric riteral "−273.15" with *number* parser. 
+Parsect provides some commonly-used parsers. **number** is a built-in parser that parse a numeral strings. **number** is a **Persect.Parser** object and a Parser object has **parse** function in it's property. *parse* takes a string parameter as input. So following code parses numeric riteral "−273.15" with *number* parser. 
 
     var r:State = number.parse("−273.15");
 
-*parse* function returns a **Parsect.State** object. It contains the parsed numeric value, either succeed or failed, and a position in input.
+*parse* function returns a **Parsect.State** object. It contains the parsed numeric string, either succeed or failed, and the position in input at the parsing finished.
 
     var r:State = number.parse("−273.15");
     
-    var success:bool  = r.success;	       // successed or failed?
-    var value:any     = r.value;           // any parsing raw result value	
-    var source:string = r.source.input;    // whole of input string
-    var pos:number    = r.source.position; // position in input
+    var success:bool  = r.success;	       // successed or failed? ... true
+    var value:any     = r.value;           // any parsing raw result value ... "-273.15"	
+    var source:string = r.source.input;    // whole of input string ... "-273.15"
+    var pos:number    = r.source.position; // position in input ... 7
 
+You can get the raw parsing result value from the *value* property of the *State* obbject. *number* parser returns string as a raw result but some parsers returns other type value. 
 You can consider all parsers a imutable objects. Any parsing would not modify the parser and you can reuse those parsers as many times you want. Additionally you should not change any parser's property.
 
-### *string* parser
+### *string* function
 
-**string** parser is the most simple parser. *string* parses a specific string and return it. To get a *string* parser, use *string* function. If you want to parse a string "apple", use *string* as follows:
+Parsect has some functions that creates a parser. **string** function is one of them. *string* take a string and return new parser. This parser parses the string and return it as a raw result value. For example, if you want to parse a string "apple", use *string* function as follows:
 
     var p:Parser = string("apple");
     var r:State  = p.parse("apple, grape, banana");
@@ -39,9 +40,9 @@ You can consider all parsers a imutable objects. Any parsing would not modify th
 
 If the parser recieve a unexpected input string like "application", the parser would consume no charactors and fail. The both two words have first four letter "appl" but the parser don't throw a exception and parsing would continue to search other matchings. 
 
-### *regexp* parser
+### *regexp* function
 
-**regexp** parser parses a string represented by regular expressions. *regexp* function takes a RegExp object. For example, the folllowing parser accepts any numerical string:
+**regexp** function creates a parser that parses a string represented by regular expressions. *regexp* function takes a RegExp object. For example, the folllowing parser accepts any numerical string:
 
     var number = regexp(/^[-+]?\d+(\.\d+)?/);
 
