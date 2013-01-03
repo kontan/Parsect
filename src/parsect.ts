@@ -61,8 +61,7 @@ module Parsect{
 		});
 	}
 
-	export function series():Parser{
-		var ps:Parser[] = <any>arguments;
+	export function series(...ps:Parser[]):Parser{
 		return new Parser("series", (source:Source)=>{
 			var currentState:State = new State(undefined, source, true);
 			for(var i = 0; i < ps.length; i++){
