@@ -160,7 +160,7 @@ module Parsect{
 		});
 	}
 
-	export function or(a?:Parser, b?:Parser, c?:Parser, d?:Parser, e?:Parser, f?:Parser, g?:Parser, h?:Parser):Parser{
+	export function or(...ps:Parser[]):Parser{
 		var ps:Parser[] = <any>arguments;
 		return new Parser("or", (source:Source)=>{
 			for(var i = 0; i < ps.length; i++){
