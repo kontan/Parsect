@@ -17,7 +17,11 @@ var series   = Parsect.series;
 var or       = Parsect.or;
 var sepBy1   = Parsect.sepBy1;
 var sepBy    = Parsect.sepBy;
+var between  = Parsect.between;
+var trying   = Parsect.trying;
 
+var eof      = Parsect.eof;
+var empty    = Parsect.empty;
 var string   = Parsect.string;
 var regexp   = Parsect.regexp;
 var number   = Parsect.number;
