@@ -17,6 +17,7 @@ var series   = Parsect.series;
 var or       = Parsect.or;
 var sepBy1   = Parsect.sepBy1;
 var sepBy    = Parsect.sepBy;
+var endBy    = Parsect.endBy;
 var between  = Parsect.between;
 var trying   = Parsect.trying;
 

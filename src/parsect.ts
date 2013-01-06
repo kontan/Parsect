@@ -18,7 +18,7 @@ module Parsect{
 	}
 
 	export class Source{ 
-		constructor(public source:string, public position?:number = 0){		
+		constructor(public source:string, public position?:number = 0){	
 		}
 		// Progress the position.
 		progress(delta:number):Source{
@@ -31,9 +31,21 @@ module Parsect{
 		fail(message?:string):State{
 			return new State(undefined, this, false, message);
 		}
+		getPosition():Position{
+			var lines = this.source.slice(0, this.position).split('\n');
+			return { line: lines.length, column: lines[lines.length - 1].length };
+		}
+		getInput():string{
+			return this.source.slice(this.position);
+		}
 	}
 
-	interface Context{
+	export interface Position{
+		line:number;
+		column:number;
+	}
+
+	export interface Context{
 		(p:Parser):any;
 		(s:string):string;
 		source():string;	// for debugging
@@ -242,7 +254,7 @@ module Parsect{
 				xs.unshift(x);
 				return xs;
 			} 
-		}); 
+		}).parse(source); 
 	});
 
 	export var endBy = (p:Parser, sep:Parser)=>new Parser("endBy", or(endBy1(p, sep), empty).parse);
