@@ -192,6 +192,8 @@ module Parsect{
 				var st = ps[i].parse(source);
 				if(st.success){
 					return st;
+				}else if(st.source.position != source.position){
+					return st;
 				}
 			}
 			return source.fail();

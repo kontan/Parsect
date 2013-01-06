@@ -24,8 +24,12 @@ function join(ss:string[]){
 test.parse("test seq 1" ,    seqTest, "(a)", 3, "a");
 test.parse("test seq 2" ,    seqTest, "(b)", 1, undefined, false);
 
+
+var parens_a = between(string('('), string(')'))(string('a'));
+var parens_b = between(string('('), string(')'))(string('b'));
 test.parse("test trying 1" ,  trying(seqTest), "(a)", 3, "a");
-test.parse("test trying 1" ,  or(trying(seqTest), between(string('('), string(')'))(string('b'))), "(b)", 3, "b");
+test.parse("test trying 1" ,  or(parens_a, parens_b), "(b)", 1, undefined, false);
+test.parse("test trying 1" ,  or(trying(parens_a), parens_b), "(b)", 3, "b");
 
 test.parse("countTest",      map(join, count(3, string("a"))),              "aaa", 3, "a,a,a");
 test.parse("test many",       map(join, many(string("a"))),                  "aa", 2, "a,a");
