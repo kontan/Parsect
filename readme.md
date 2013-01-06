@@ -96,11 +96,41 @@ If calculation for the result value is costly, you should call *success()* funct
         }
     });
 
+### *series* combinator
+
+**series** combinator takes some parsers as parameters and creates series of parsers. This parser returns just the value of last parser of the parameters. Following parser *p* parses "abc" and return "c" as raw value.
+
+    var p:Parser = series(string('a'), string('b'), string('c'));
+
 ### *or* combinator
 
 **or** combinator takes some parsers as parameter and try parsing in sequence. If one of them could parse the input, the State object would be returned. For example, the following parser will consume any combination of "a" or "b":
 
     many(or(string("a"), string("b")));
+
+### *trying* combinator
+
+Here are two parsers. *pa* parses "[a]" and *pb* parses "[b]". A parser *or(pa, pb)* fails to parse "[b]".
+
+    var pa = between(string('['), string(']'))(string('a'));
+    var pb = between(string('['), string(']'))(string('b'));
+    var r = or(pa, pb).parse(new Source("(b)"));
+    console.log(r.success);    // prints "false"
+
+It's because *pa* consumes "[" and *pb* receives remaining "b]". Generally, commonalizing "[" of both of parsers is the best way. 
+
+    var pa = series(string('a'), string(']'));
+    var pb = series(string('b'), string(']'));
+    var r = series(string('['), or(pa, pb)).parse(new Source("[b]"));
+    console.log(r.success);    // prints "true"
+
+However, if commonalizing is difficult, you can use *trying* combinator to solve it. *trying* parser can retrieve overconsumed strings.
+
+    var pa = between(string('['), string(']'))(string('a'));
+    var pb = between(string('['), string(']'))(string('b'));
+    var r = or(trying(pa), pb).parse(new Source("[b]"));
+    console.log(r.success);    // prints "true"
+
 
 ## Sample Code
 

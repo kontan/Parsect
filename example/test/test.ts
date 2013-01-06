@@ -59,3 +59,14 @@ test.parse("test empty",       empty, "a", 0, undefined, true);
 
 var span:HTMLElement = <any>document.querySelector("#result");
 span.innerHTML = test.report();
+
+
+var pa = between(string('('), string(')'))(string('a'));
+ var pb = between(string('('), string(')'))(string('b'));
+ var r = or(trying(pa), pb).parse(new Source("(b)"));
+ console.log(r.success);    // prints "false"
+
+ var _pa = series(string('a'), string(')'));
+ var _pb = series(string('b'), string(')'));
+ var _r = series(string('('), or(_pa, _pb)).parse(new Source("(b)"));
+ console.log(_r.success);    // prints "true"
