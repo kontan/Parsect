@@ -179,7 +179,7 @@ Here is a sample of four arithmetic operations calculator. (To keep it simple, a
     });
     
     // factor := "(" expr ")"  |  number
-    var factor = or(between(tok_left, tok_right, expr), tok_number);
+    var factor = or(between(tok_left, expr, tok_right), tok_number);
     
     console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);    
 
