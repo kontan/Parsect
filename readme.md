@@ -6,7 +6,9 @@
 
 I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Parsec) parser combinator library in Haskell, however this is not a porting of Parsec. Unfortunately, this library doesn't have underlying Monad or Fanctor and it doesn't deal a string as a list of charactor. However, you can combine parsers in the same manner as Parsec with Parsect. 
 
-Parsect characteristically has Haskell's **do notation**-like notation style. This notation makes a parser more readable. Additionally, **Regular Expression Parser** also is supported. You can combine RegExp parsers with other parsers. Hoever, remember that the implementation of Parsect is highly experimental and lacks stability. 
+Parsect characteristically has Haskell's **do notation**-like notation style. This notation makes a parser more readable. Additionally, **Regular Expression Parser** also is supported. You can combine RegExp parsers with other parsers. 
+
+Debugging parser is easy. You can set a breakpoint in the middle of your parser and watch that the parser consumes the input step-by-step.　 
 
 ## Getting Started
 
@@ -76,6 +78,23 @@ This parser parses a numeric string between parenses. The argument *s* is a func
 If a parser applied to *s* failed, all following parsers would be ignore. 
 
 When the parsing succeeded, *seq* returns a State object contains the value returned from the parameter function. Otherwise, the *value* property of the state object is *undefined*, regardless of the parameter function returns any value.
+
+*s* context has other useful properties:
+
+* **success():bool** returns the status of successing or failed about the seqence of parsers. 
+* **source():string** returns the next input string. 
+* **result():any** returns current raw result value.
+
+If calculation for the result value is costly, you should call *success()* function and avoid the calculation as follows:
+
+    var p:Parser = seq((s)=>{
+        s(string("("));
+        var v:number = s(number);
+        s(string(")"));
+        if(s.success()){
+            return very_very_large_operation(v);
+        }
+    });
 
 ### *or* combinator
 

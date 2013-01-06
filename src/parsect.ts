@@ -88,10 +88,8 @@ module Parsect{
 				}
 			};
 			s.success = ()=> st.success;
-			s.source  = ()=> st.source.source.slice(st.source.position, st.source.position + 64);
-			s.result  = ()=> st.value === undefined ? "<undefined>"
-			               : st.value === null      ? "<null>"
-			               : st.value.toString().slice(0, 16);
+			s.source  = ()=> st.source.source.slice(st.source.position);
+			s.result  = ()=> st.value;
 			var r = f(s);
 			return s.success() ? (r !== undefined ? st.source.success(0, r) : st) : st;
 		});
