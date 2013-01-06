@@ -25,8 +25,8 @@ test.parse("test seq 1" ,    seqTest, "(a)", 3, "a");
 test.parse("test seq 2" ,    seqTest, "(b)", 1, undefined, false);
 
 
-var parens_a = between(string('('), string(')'))(string('a'));
-var parens_b = between(string('('), string(')'))(string('b'));
+var parens_a = between(string('('), string(')'), string('a'));
+var parens_b = between(string('('), string(')'), string('b'));
 test.parse("test trying 1" ,  trying(seqTest), "(a)", 3, "a");
 test.parse("test trying 1" ,  or(parens_a, parens_b), "(b)", 1, undefined, false);
 test.parse("test trying 1" ,  or(trying(parens_a), parens_b), "(b)", 3, "b");
@@ -46,8 +46,8 @@ test.parse("test sepBy1 4",        sepTest , "a_b", 2, undefined, false);
 var sepBy_1 = sepBy(string("a"), string("_")); 
 test.parse("sepBy 1",        sepBy_1 , "", 0, undefined, true);
 
-test.parse("between 1",        between(string('['), string(']'))(string('a')) , "[a]", 3, 'a', true);
-test.parse("between 2",        between(string('['), string(']'))(string('a')) , "[b]", 1, undefined, false);
+test.parse("between 1",        between(string('['), string(']'), string('a')) , "[a]", 3, 'a', true);
+test.parse("between 2",        between(string('['), string(']'), string('a')) , "[b]", 1, undefined, false);
 
 test.parse("test eof 1",       eof, "", 1, undefined, true);
 test.parse("test eof 2",       series(string("a"), eof), "a", 2, undefined, true);
@@ -61,8 +61,8 @@ var span:HTMLElement = <any>document.querySelector("#result");
 span.innerHTML = test.report();
 
 
-var pa = between(string('('), string(')'))(string('a'));
- var pb = between(string('('), string(')'))(string('b'));
+var pa = between(string('('), string(')'), string('a'));
+ var pb = between(string('('), string(')'), string('b'));
  var r = or(trying(pa), pb).parse(new Source("(b)"));
  console.log(r.success);    // prints "false"
 

@@ -259,13 +259,13 @@ module Parsect{
 
 	export var endBy = (p:Parser, sep:Parser)=>new Parser("endBy", or(endBy1(p, sep), empty).parse);
 
-	// between:(open:Parser, close:Parser)=>((p:Parser)=>Parser)
-	export var between = (open:Parser, close:Parser)=>((p:Parser)=>seq((s)=>{
+	// between:(open:Parser, close:Parser, p:Parser)=>Parser
+	export var between = (open:Parser, close:Parser, p:Parser)=>seq((s)=>{
 		s(open);
 		var v = s(p);
 		s(close);
 		return v;
-	}));	
+	});	
 
 	///////////////////////////////////////////////////////////////////////////////////////
 	// Build-in Parsees

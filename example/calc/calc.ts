@@ -46,15 +46,7 @@ var term = seq((s)=>{
 });
 
 // factor = "(" expr ")"  |  number
-var factor = or(
-	seq((s)=>{
-		s(tok_left);				
-		var v = s(expr);
-		s(tok_right);
-		return v;
-	}),
-	tok_number
-);
+var factor = or(between(tok_left, tok_right, expr), tok_number);
 
 console.log("test expr: ");
 console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);

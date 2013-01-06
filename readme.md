@@ -79,7 +79,7 @@ If a parser applied to *s* failed, all following parsers would be ignore.
 
 When the parsing succeeded, *seq* returns a State object contains the value returned from the parameter function. Otherwise, the *value* property of the state object is *undefined*, regardless of the parameter function returns any value.
 
-*s* context has other useful properties:
+*s* object has other useful properties:
 
 * **success():bool** returns the status of successing or failed about the seqence of parsers. 
 * **source():string** returns the next input string. 
@@ -179,15 +179,7 @@ Here is a sample of four arithmetic operations calculator. (To keep it simple, a
     });
     
     // factor := "(" expr ")"  |  number
-    var factor = or(
-        seq((s)=>{
-            s(tok_left);                
-            var v = s(expr);
-            s(tok_right);
-            return v;
-        }),
-        tok_number
-    );
+    var factor = or(between(tok_left, tok_right, expr), tok_number);
     
     console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);    
 
