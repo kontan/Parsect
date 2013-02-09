@@ -7,29 +7,120 @@ module Parsect{
 	// Data
 	/////////////////////////////////////////////////////////////////////////////////////////
 
+	/**
+	 * class Parser<T>
+	 */
 	export class Parser{
-		constructor(public name:string, public parse:(source:Source)=>State){
+		constructor(private _name:string, private _parse:(source:Source)=>State, private _expected?:string){
+		}
+		get name():string{
+			return this._name;
+		}
+		get parse(): { (source:Source):State; (source:string):State; }{
+			return (arg:any)=> arg instanceof Source ? this._parse(arg) : this._parse(new Source(arg));
+		}
+		get expected():string{
+			return this._expected;
 		}
 	}
 
+	/**
+	 * 
+	 */ 
 	export class State{ 
-		constructor(public value:any, public source:Source, public success:bool=true, public errorMesssage?:string){
+		private _value:any;
+		private _source:Source;
+		private _success:bool;
+		private _errorMesssage:string;
+
+		/** 
+		 * private constructor
+		 * You should use success or fail functions instead of the constructor.
+		 */
+		constructor(value:any, source:Source, success:bool=true, errorMesssage?:string);
+		constructor(value:any, source:string, success:bool=true, errorMesssage?:string);
+		constructor(value:any, source:any,    success:bool=true, errorMesssage?:string){
+			this._value = value;
+			this._source = source instanceof Source ? source : new Source(source);
+			this._success = success;
+			this._errorMesssage = errorMesssage;
+		}
+
+		static success(source:Source, value:any):State;
+		static success(source:string, position:number, value:any):State;
+		static success(arg0:any, arg1:any, arg2?:any):State{
+			var source = arg0 instanceof Source ? arg0 : new Source(arg0, arg1);
+			var value  = arg0 instanceof Source ? arg1 : arg2;
+			return new State(value, source, true, undefined);
+		}
+
+		static fail(source:Source, errorMesssage:string):State;
+		static fail(source:string, position:number, errorMesssage:string):State;
+		static fail(arg0:any, arg1:any, arg2?:any):State{
+			var source  = arg0 instanceof Source ? arg0 : new Source(arg0, arg1);
+			var message = arg0 instanceof Source ? arg1 : arg2;
+			return new State(undefined, source, false, message);
+		}
+
+		get value():any{
+			return this._value;
+		}
+
+		get source():Source{
+			return this._source;
+		}
+
+		get success():bool{
+			return this._success;
+		}
+
+		get errorMesssage():string{
+			return this._errorMesssage;
+		}
+
+		get position():number{
+			return this.source.position;
+		}
+
+		equals(st:State):bool{
+			if(!st) return false;
+			return this.value         === st.value   && 
+			       this.source.equals(st.source)     && 
+			       this.success       === st.success &&
+			       this.errorMesssage === st.errorMesssage;
 		}
 	}
 
 	export class Source{ 
-		constructor(public source:string, public position?:number = 0){	
+		constructor(private _source:string, private _position?:number = 0){	
+			// _position == _source.length + 1 at the maximum because of eof.
+			if(_position < 0 || _position > _source.length + 1) throw "_position: out of range: " + _position;
 		}
+
+		get source():string{
+			return this._source;
+		}
+		set source(v:string){
+			throw "Source.source is readonly.";
+		}
+
+		get position():number{
+			return this._position;
+		}
+		set position(v:number){
+			throw "Source.position is readonly.";
+		}
+
 		// Progress the position.
 		progress(delta:number):Source{
 			return new Source(this.source, this.position + delta);
 		}
 
 		success(delta?:number=0, value?:any=undefined):State{
-			return new State(value, new Source(this.source, this.position + delta), true);
+			return State.success(new Source(this.source, this.position + delta), value);
 		}
 		fail(message?:string):State{
-			return new State(undefined, this, false, message);
+			return State.fail(this, message);
 		}
 		getPosition():Position{
 			var lines = this.source.slice(0, this.position).split('\n');
@@ -37,6 +128,10 @@ module Parsect{
 		}
 		getInput():string{
 			return this.source.slice(this.position);
+		}
+
+		equals(src:Source):bool{
+			return src && this._source === src._source && this._position === src._position;
 		}
 	}
 
@@ -58,7 +153,11 @@ module Parsect{
 	////////////////////////////////////////////////////////////////////////////////////
 
 	export function string(text:string):Parser{
-		return new Parser("string \"" + text + "\"", (s:Source)=>s.source.indexOf(text, s.position) === s.position ? s.success(text.length, text) : s.fail("expected \"" + text + "\""));
+		return new Parser(
+			"string \"" + text + "\"", 
+			(s:Source)=>s.source.indexOf(text, s.position) === s.position ? s.success(text.length, text) : s.fail("expected \"" + text + "\""),
+			"\"" + text + "\""
+		);
 	}
 
 	export function regexp(pattern:RegExp):Parser{
@@ -69,18 +168,28 @@ module Parsect{
 			//  "input.indexOf(matches[0]) == 0" is needed.
 			if(ms && ms.length > 0){
 				var m = ms[0];
-				return input.indexOf(ms[0]) == 0 ? s.success(m.length, m) : s.fail();
+				return input.indexOf(ms[0]) == 0 ? s.success(m.length, m) : s.fail("expected /" + pattern + "/");
 			}else{
-				return s.fail();
+				return s.fail("expected /" + pattern + "/");
 			}
-		});
+		}, "/" + pattern + "/");
 	}
 
 	export function satisfy(cond:(c:string)=>bool):Parser{
+		var expectedChars = ()=>{
+			var cs = [];
+			for(var i = 32; i <= 126; i++){
+				var c = String.fromCharCode(i);
+				if(cond(c)){
+					cs.push(c);					
+				}
+			}
+			return cs;
+		};
 		return new Parser("satisfy", (s:Source)=>{
 			var c = s.source[s.position];
-			return cond(c) ? s.success(1, c) : s.fail();
-		});
+			return cond(c) ? s.success(1, c) : s.fail("expected one char of \"" + expectedChars().join('') + "\"");
+		}, '(satisfy)');
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////
@@ -126,7 +235,7 @@ module Parsect{
 				if(_st.success){ 
 					st = _st;
 				}else{
-					return st.source.fail();
+					return st.source.fail(_st.errorMesssage);
 				}
 			}
 			return st.success ? st : st.source.fail();
@@ -192,7 +301,7 @@ module Parsect{
 					break;
 				}
 			}
-			return results.length > 0 ? st.source.success(0, results) : st.source.fail();
+			return results.length > 0 ? st.source.success(0, results) : st.source.fail("expected one or more " + p.expected);
 		});
 	}
 
