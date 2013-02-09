@@ -112,8 +112,8 @@ If calculation for the result value is costly, you should call *success()* funct
 
 Here are two parsers. *pa* parses "[a]" and *pb* parses "[b]". A parser *or(pa, pb)* fails to parse "[b]".
 
-    var pa = between(string('['), string(']'))(string('a'));
-    var pb = between(string('['), string(']'))(string('b'));
+    var pa = between(string('['), string('a'), string(']'));
+    var pb = between(string('['), string('b'), string(']'));
     var r = or(pa, pb).parse(new Source("(b)"));
     console.log(r.success);    // prints "false"
 
@@ -126,8 +126,8 @@ It's because *pa* consumes "[" and *pb* receives remaining "b]". Generally, comm
 
 However, if commonalizing is difficult, you can use *trying* combinator to solve it. *trying* parser can retrieve overconsumed strings.
 
-    var pa = between(string('['), string(']'))(string('a'));
-    var pb = between(string('['), string(']'))(string('b'));
+    var pa = between(string('['), string('a'), string(']'));
+    var pb = between(string('['), string('b'), string(']'));
     var r = or(trying(pa), pb).parse(new Source("[b]"));
     console.log(r.success);    // prints "true"
 
