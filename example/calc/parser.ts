@@ -43,4 +43,4 @@ var term = seq((s)=>{
 });
 
 // factor = "(" expr ")"  |  number
-var factor = or(between(tok_left, tok_right, expr), tok_number);
+var factor = or(between(tok_left, expr, tok_right), tok_number);

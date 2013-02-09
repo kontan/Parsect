@@ -243,7 +243,7 @@ test("satisfy test 1", ()=>{
 
 test("expr test 1", ()=>{
 	var parser = expr; 
-	var source = "1+2";
-	var expected = Parsect.State.success(source, 3, 3);
+	var source = "(3 + 4) * 5.0 / 0.2 - 7";
+	var expected = Parsect.State.success(source, 23, 168);
 	ok(parser.parse(source).equals(expected));
 });
