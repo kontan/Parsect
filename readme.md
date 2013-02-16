@@ -185,7 +185,7 @@ Here is a sample of four arithmetic operations calculator. (To keep it simple, a
 
 ## Change log
 
-2013 01 01 **ver. 0,1**
+2013 01 01 **ver. 0.1**
 
 * First release
 

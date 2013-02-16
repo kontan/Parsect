@@ -166,13 +166,13 @@ module Parsect{
 			var ms = pattern.exec(input);
 			// In javascript' Regex, ^ matches not only the benning of the input but the beginniing of new line.
 			//  "input.indexOf(matches[0]) == 0" is needed.
-			if(ms && ms.length > 0){
+			if(ms && ms.index == 0 && ms.length > 0){
 				var m = ms[0];
 				return input.indexOf(ms[0]) == 0 ? s.success(m.length, m) : s.fail("expected /" + pattern + "/");
 			}else{
-				return s.fail("expected /" + pattern + "/");
+				return s.fail("expected " + pattern);
 			}
-		}, "/" + pattern + "/");
+		}, pattern.toString());
 	}
 
 	export function satisfy(cond:(c:string)=>bool):Parser{
@@ -332,6 +332,13 @@ module Parsect{
 	// optional:(p:Parser<T>):Parser<T>
 	export function optional(p:Parser):Parser{
 		return new Parser("optional", option(undefined, p).parse);
+	}
+
+	export function notFollowedBy(value:any, p:Parser):Parser{
+		return new Parser("notFollowedBy " + p.name, (source:Source)=>{
+			var st = p.parse(source);
+			return st.success ? State.success(source, value) : st.source.fail('not expected ' + p.expected);
+		});
 	}
 
 	export function map(f:(v:any)=>any, p:Parser){

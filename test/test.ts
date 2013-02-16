@@ -239,6 +239,26 @@ test("satisfy test 1", ()=>{
 	ok(parser.parse(source).equals(expected));
 });
 
+test("regexp test 1", ()=>{
+	var parser = regexp(/abcde/); 
+	var source = "abcde";
+	var expected = Parsect.State.success(source, 5, source);
+	ok(parser.parse(source).equals(expected));
+});
+
+test("regexp test 2", ()=>{
+	var parser = regexp(/abc/); 
+	var source = "xxabcxx";
+	var expected = Parsect.State.fail(source, 0, 'expected /abc/');
+	ok(parser.parse(source).equals(expected));
+});
+
+test("regexp test 3", ()=>{
+	var parser = regexp(/a*/); 
+	var source = "aaaaabbbbb";
+	var expected = Parsect.State.success(source, 5, 'aaaaa');
+	ok(parser.parse(source).equals(expected));
+});
 
 
 test("expr test 1", ()=>{
