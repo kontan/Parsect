@@ -160,6 +160,7 @@ module Parsect{
 		);
 	}
 
+/*
 	export function regexp(pattern:RegExp):Parser{
 		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
 			var input = s.source.slice(s.position);
@@ -169,6 +170,19 @@ module Parsect{
 			if(ms && ms.index == 0 && ms.length > 0){
 				var m = ms[0];
 				return input.indexOf(ms[0]) == 0 ? s.success(m.length, m) : s.fail("expected /" + pattern + "/");
+			}else{
+				return s.fail("expected " + pattern);
+			}
+		}, pattern.toString());
+	}
+*/
+	export function regexp(pattern:RegExp):Parser{
+		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
+			pattern.lastIndex = s.position;
+			var ms = pattern.exec(s.source);
+			if(ms && ms.length > 0 && ms.index == s.position){
+				var m = ms[0];
+				return s.success(m.length, m);
 			}else{
 				return s.fail("expected " + pattern);
 			}

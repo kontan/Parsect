@@ -1,12 +1,12 @@
 /// <reference path="parsect.ts" /> 
 
-var tok_number = map(parseFloat, regexp(/\s*[-+]?\d+(\.\d+)?\s*/));
-var tok_plus  = regexp(/\s*\+\s*/);
-var tok_minus = regexp(/\s*\-\s*/);
-var tok_div   = regexp(/\s*\/\s*/);
-var tok_mul   = regexp(/\s*\*\s*/);
-var tok_left  = regexp(/\s*\(\s*/);
-var tok_right = regexp(/\s*\)\s*/);
+var tok_number = map(parseFloat, regexp(/\s*[-+]?\d+(\.\d+)?\s*/g));
+var tok_plus  = regexp(/\s*\+\s*/g);
+var tok_minus = regexp(/\s*\-\s*/g);
+var tok_div   = regexp(/\s*\/\s*/g);
+var tok_mul   = regexp(/\s*\*\s*/g);
+var tok_left  = regexp(/\s*\(\s*/g);
+var tok_right = regexp(/\s*\)\s*/g);
 
 // expr := term ("+" expr | "-" expr)?
 var expr = seq((s)=>{
