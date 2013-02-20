@@ -143,6 +143,7 @@ module Parsect{
 	export interface Context{
 		(p:Parser):any;
 		(s:string):string;
+		notFollowedBy:(p:Parser)=>void;
 		source():string;	// for debugging
 		success():bool;   // for debugging
 		result():any;     // for debugging
@@ -220,6 +221,12 @@ module Parsect{
 					if(st.success){ 
 						return st.value; 
 					}
+				}
+			};
+			s.notFollowedBy = (p:Parser)=>{
+				var _st = p.parse(st.source);
+				if(_st.success){
+					st = st.source.fail('unexpected ' + p.expected);
 				}
 			};
 			s.success = ()=> st.success;
