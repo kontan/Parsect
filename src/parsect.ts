@@ -144,7 +144,7 @@ module Parsect{
 		(p:Parser):any;
 		(s:string):string;
 		notFollowedBy:(p:Parser)=>void;
-		source():string;	// for debugging
+		peek():string;	// for debugging
 		success():bool;   // for debugging
 		result():any;     // for debugging
 	}
@@ -217,7 +217,7 @@ module Parsect{
 				}
 			};
 			s.success = ()=> st.success;
-			s.source  = ()=> st.source.source.slice(st.source.position);
+			s.peek  = ()=> st.source.source.slice(st.source.position, st.source.position + 128);
 			s.result  = ()=> st.value;
 			var r = f(s);
 			return s.success() ? (r !== undefined ? st.source.success(0, r) : st) : st;
