@@ -161,29 +161,16 @@ module Parsect{
 		);
 	}
 
-/*
 	export function regexp(pattern:RegExp):Parser{
 		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
 			var input = s.source.slice(s.position);
+			pattern.lastIndex = 0;
 			var ms = pattern.exec(input);
 			// In javascript' Regex, ^ matches not only the benning of the input but the beginniing of new line.
 			//  "input.indexOf(matches[0]) == 0" is needed.
 			if(ms && ms.index == 0 && ms.length > 0){
 				var m = ms[0];
 				return input.indexOf(ms[0]) == 0 ? s.success(m.length, m) : s.fail("expected /" + pattern + "/");
-			}else{
-				return s.fail("expected " + pattern);
-			}
-		}, pattern.toString());
-	}
-*/
-	export function regexp(pattern:RegExp):Parser{
-		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
-			pattern.lastIndex = s.position;
-			var ms = pattern.exec(s.source);
-			if(ms && ms.length > 0 && ms.index == s.position){
-				var m = ms[0];
-				return s.success(m.length, m);
 			}else{
 				return s.fail("expected " + pattern);
 			}
@@ -408,12 +395,25 @@ module Parsect{
 	// Build-in Parsees
 	/////////////////////////////////////////////////////////////////////////////////////////
 
+
+	export function log(f:(state:number)=>void): Parser{
+        var count = 0;
+        return new Parser("log", (source)=>{
+            var pos = Math.floor(100 * source.position / source.source.length);
+            if(pos > count) {
+                count = pos;
+                f(count);
+            }
+            return source.success(0);
+        });
+    }
+
 	// Primitives
 	export var eof:Parser    = new Parser('eof',   (source:Source)=>source.position === source.source.length ? source.success(1) : source.fail());
 	export var empty:Parser  = new Parser("empty", (source:Source)=>source.success(0));
 
 	// Charactors
-	export var spaces:Parser = regexp(/^\w*/);
+	export var spaces:Parser = regexp(/^\s*/);
 	export var lower         = regexp(/^[a-z]/);
 	export var upper         = regexp(/^[A-Z]/);
 	export var alpha         = regexp(/^[a-zA-Z]/);

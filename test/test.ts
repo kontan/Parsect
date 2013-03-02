@@ -262,6 +262,20 @@ test("regexp test 3", ()=>{
 
 
 test("expr test 1", ()=>{
+	var parser = tok_number; 
+	var source = " 123 ";
+	var expected = Parsect.State.success(source, 5, 123);
+	ok(parser.parse(source).equals(expected));
+});
+
+test("expr test 2", ()=>{
+	var parser = expr; 
+	var source = " 1 + 3 ";
+	var expected = Parsect.State.success(source, 7, 4);
+	ok(parser.parse(source).equals(expected));
+});
+
+test("expr test 3", ()=>{
 	var parser = expr; 
 	var source = "(3 + 4) * 5.0 / 0.2 - 7";
 	var expected = Parsect.State.success(source, 23, 168);

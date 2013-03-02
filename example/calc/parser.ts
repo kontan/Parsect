@@ -1,4 +1,4 @@
-/// <reference path="parsect.ts" /> 
+/// <reference path="../../src/parsect.ts" /> 
 
 var tok_number = map(parseFloat, regexp(/\s*[-+]?\d+(\.\d+)?\s*/g));
 var tok_plus  = regexp(/\s*\+\s*/g);
