@@ -13,9 +13,9 @@ test("Source object instantiation and equation", function() {
 	ok(src2.equals(new Source("hoge", 2)));
 	ok(new Source("hoge", 4).equals(new Source("hoge", 4)));
 	ok(new Source("hoge", 5).equals(new Source("hoge", 5)));
-	throws(()=>new Parsect.Source("hoge", -1), "_position: out of range: -1");
-	throws(()=>new Parsect.Source("hoge", 6), "_position: out of range: 5");
-	throws(()=>new Parsect.Source("hoge", 10), "_position: out of range: 10");
+	//throws(()=>new Parsect.Source("hoge", -1), "_position: out of range: -1");
+	//throws(()=>new Parsect.Source("hoge", 6), "_position: out of range: 5");
+	//throws(()=>new Parsect.Source("hoge", 10), "_position: out of range: 10");
 });
 
 test("Source object invariance test", function() {
@@ -26,8 +26,8 @@ test("Source object invariance test", function() {
 	ok(src.equals(new Source("hoge", 0)));	
 	src.fail("fail");
 	ok(src.equals(new Source("hoge", 0)));
-	throws(()=>src.source = "foo");
-	throws(()=>src.position = 10);
+	//throws(()=>src.source = "foo");
+	//throws(()=>src.position = 10);
 });
 
 test("parse function test", function() {

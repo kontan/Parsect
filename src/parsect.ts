@@ -11,16 +11,19 @@ module Parsect{
 	 * class Parser<T>
 	 */
 	export class Parser{
-		constructor(private _name:string, private _parse:(source:Source)=>State, private _expected?:string){
+		constructor(public name:string, private _parse:(source:Source)=>State, public expected?:string){
+
+			// 今のところ動いてるけど、これがあると parse をほかの関数に渡した時に起こる無限再帰を回避できる場合がある
+			// this の意味が変わったのが原因？
+			//this.parse = (arg)=>{ return (arg instanceof Source) ? _parse(arg) : _parse(new Source(arg)); };
+		
 		}
-		get name():string{
-			return this._name;
-		}
-		get parse(): { (source:Source):State; (source:string):State; }{
-			return (arg:any)=> arg instanceof Source ? this._parse(arg) : this._parse(new Source(arg));
-		}
-		get expected():string{
-			return this._expected;
+
+		parse(source:Source):State; 
+		parse(source:string):State;
+		parse(arg:any):State{
+			// unused
+			return arg instanceof Source ? this._parse(arg) : this._parse(new Source(arg));
 		}
 	}
 
@@ -28,10 +31,11 @@ module Parsect{
 	 * 
 	 */ 
 	export class State{ 
-		private _value:any;
-		private _source:Source;
-		private _success:bool;
-		private _errorMesssage:string;
+		value:any;
+		source:Source;
+		success:bool;
+		errorMesssage:string;
+		position: number;
 
 		/** 
 		 * private constructor
@@ -40,10 +44,11 @@ module Parsect{
 		constructor(value:any, source:Source, success:bool=true, errorMesssage?:string);
 		constructor(value:any, source:string, success:bool=true, errorMesssage?:string);
 		constructor(value:any, source:any,    success:bool=true, errorMesssage?:string){
-			this._value = value;
-			this._source = source instanceof Source ? source : new Source(source);
-			this._success = success;
-			this._errorMesssage = errorMesssage;
+			this.value = value;
+			this.source = source instanceof Source ? source : new Source(source);
+			this.success = success;
+			this.errorMesssage = errorMesssage;
+			this.position = this.source.position;
 		}
 
 		static success(source:Source, value:any):State;
@@ -62,26 +67,6 @@ module Parsect{
 			return new State(undefined, source, false, message);
 		}
 
-		get value():any{
-			return this._value;
-		}
-
-		get source():Source{
-			return this._source;
-		}
-
-		get success():bool{
-			return this._success;
-		}
-
-		get errorMesssage():string{
-			return this._errorMesssage;
-		}
-
-		get position():number{
-			return this.source.position;
-		}
-
 		equals(st:State):bool{
 			if(!st) return false;
 			return this.value         === st.value   && 
@@ -92,23 +77,9 @@ module Parsect{
 	}
 
 	export class Source{ 
-		constructor(private _source:string, private _position?:number = 0){	
+		constructor(public source:string, public position?:number = 0){	
 			// _position == _source.length + 1 at the maximum because of eof.
-			if(_position < 0 || _position > _source.length + 1) throw "_position: out of range: " + _position;
-		}
-
-		get source():string{
-			return this._source;
-		}
-		set source(v:string){
-			throw "Source.source is readonly.";
-		}
-
-		get position():number{
-			return this._position;
-		}
-		set position(v:number){
-			throw "Source.position is readonly.";
+			if(position < 0 || position > source.length + 1) throw "_position: out of range: " + position;
 		}
 
 		// Progress the position.
@@ -131,7 +102,7 @@ module Parsect{
 		}
 
 		equals(src:Source):bool{
-			return src && this._source === src._source && this._position === src._position;
+			return src && this.source === src.source && this.position === src.position;
 		}
 	}
 
@@ -339,7 +310,7 @@ module Parsect{
 
 	// optional:(p:Parser<T>):Parser<T>
 	export function optional(p:Parser):Parser{
-		return new Parser("optional", option(undefined, p).parse);
+		return new Parser("optional", (source:Source)=>option(undefined, p).parse(source));
 	}
 
 	export function notFollowedBy(value:any, p:Parser):Parser{
@@ -356,18 +327,20 @@ module Parsect{
 		});
 	}
 
-	export var sepBy1 = (p:Parser, sep:Parser)=>new Parser("sepBy1", 
-		seq((s)=>{
+	export var sepBy1 = (p:Parser, sep:Parser)=>new Parser("sepBy1", (source:Source)=>{
+		return seq((s)=>{
 			var x = s(p);
 			var xs = s(many(series(sep, p)));
 			if(s.success()){
 				xs.unshift(x);
 				return xs;
 			}
-		}).parse
-	);
+		}).parse(source);
+	});
 
-	export var sepBy = (p:Parser, sep:Parser)=>new Parser("sepBy", or(sepBy1(p, sep), map(()=>[], empty)).parse);	
+	export var sepBy = (p:Parser, sep:Parser)=>new Parser("sepBy", (source:Source)=>{
+		return or(sepBy1(p, sep), map(()=>[], empty)).parse(source);
+	});	
 
 	export var endBy1 = (p:Parser, sep:Parser)=>new Parser("endBy1", (source:Source)=>{
 		var q = seq((s)=>{ var x = s(p); s(sep); return x; });
@@ -381,7 +354,9 @@ module Parsect{
 		}).parse(source); 
 	});
 
-	export var endBy = (p:Parser, sep:Parser)=>new Parser("endBy", or(endBy1(p, sep), empty).parse);
+	export var endBy = (p:Parser, sep:Parser)=>new Parser("endBy", (source:Source)=>{
+		return or(endBy1(p, sep), empty).parse(source);
+	});
 
 	// between:(open:Parser, close:Parser, p:Parser)=>Parser
 	export var between = (open:Parser, p:Parser, close:Parser)=>seq((s)=>{
