@@ -77,18 +77,18 @@ module Parsect{
 	}
 
 	export class Source{ 
-		constructor(public source:string, public position?:number = 0){	
+		constructor(public source:string, public position?:number = 0, public userData?: any){	
 			// _position == _source.length + 1 at the maximum because of eof.
 			if(position < 0 || position > source.length + 1) throw "_position: out of range: " + position;
 		}
 
 		// Progress the position.
 		progress(delta:number):Source{
-			return new Source(this.source, this.position + delta);
+			return new Source(this.source, this.position + delta, this.userData);
 		}
 
 		success(delta?:number=0, value?:any=undefined):State{
-			return State.success(new Source(this.source, this.position + delta), value);
+			return State.success(new Source(this.source, this.position + delta, this.userData), value);
 		}
 		fail(message?:string):State{
 			return State.fail(this, message);
@@ -114,6 +114,7 @@ module Parsect{
 	export interface Context{
 		(p:Parser):any;
 		(s:string):string;
+		getUserState(): any;
 		notFollowedBy:(p:Parser)=>void;
 		peek():string;	// for debugging
 		success():bool;   // for debugging
@@ -187,6 +188,7 @@ module Parsect{
 					st = st.source.fail('unexpected ' + p.expected);
 				}
 			};
+			s.getUserState = ()=>source.userData;
 			s.success = ()=> st.success;
 			s.peek  = ()=> st.source.source.slice(st.source.position, st.source.position + 128);
 			s.result  = ()=> st.value;
@@ -207,6 +209,21 @@ module Parsect{
 	// series function takes parsers and apply its sequentially.
 	// This function returns the State object that last parser returned.
 	export function series(...ps:Parser[]):Parser{
+		return new Parser("series", (source:Source)=>{
+			var st:State = source.success();
+			for(var i = 0; i < ps.length && st.success; i++){
+				var _st = ps[i].parse(st.source);
+				if(_st.success){ 
+					st = _st;
+				}else{
+					return st.source.fail(_st.errorMesssage);
+				}
+			}
+			return st.success ? st : st.source.fail();
+		});
+	}
+
+	export function stream(ps:Parser[]):Parser{
 		return new Parser("series", (source:Source)=>{
 			var st:State = source.success();
 			for(var i = 0; i < ps.length && st.success; i++){
@@ -302,6 +319,9 @@ module Parsect{
 
 	// option:(def:T, p:Parser<T>):Parser<T>
 	export function option(defaultValue:any, p:Parser):Parser{
+		if( ! p){
+			throw "Parsect.option: invalid argument: p";
+		}
 		return new Parser("option", (source:Source)=>{
 			var st = p.parse(source);
 			return st.success ? st : source.success(0, defaultValue);
@@ -360,15 +380,72 @@ module Parsect{
 
 	// between:(open:Parser, close:Parser, p:Parser)=>Parser
 	export var between = (open:Parser, p:Parser, close:Parser)=>seq((s)=>{
+		if( ! (open && p && close) ) throw "Parsect.between: Invalid argument:";
 		s(open);
 		var v = s(p);
 		s(close);
 		return v;
 	});	
 
+	/////////////////////////////////////////////////////////////////////////////////
+	// Applycative-like style utils
+	//////////////////////////////////////////////////////////////////////////
+
+	export function apply(func:Function, ...parserSeq:Parser[][]): Parser{
+		return new Parser("apply", (source:Source)=>{
+			var args:any[] = [];
+			var st:State = source.success();
+			for(var i = 0; i < parserSeq.length; i++){
+				var _st:State = stream(parserSeq[i]).parse(st.source);
+				if(_st.success){
+					st = _st;
+					args.push(_st.value);
+				}else{
+					return st.source.fail("");
+				}
+			}
+			return st.source.success(0, func.apply(undefined, args));
+		});
+	}
+
+	export function build(ctor:Function, ...parserSeq:Parser[][]): Parser{
+
+		for(var i = 0; i < parserSeq.length; i++){
+			for(var k = 0; k < parserSeq[i].length; k++){
+				if( ! parserSeq[i][k]){
+					throw "Parsect.build: Invalid argument: ps[" + i + "][" + k + "]";
+				}
+			}
+		}
+
+		return new Parser("apply", (source:Source)=>{
+			var args:any[] = [];
+			var st:State = source.success();
+			for(var i = 0; i < parserSeq.length; i++){
+				var _st:State = stream(parserSeq[i]).parse(st.source);
+				if(_st.success){
+					st = _st;
+					args.push(_st.value);
+				}else{
+					return st.source.fail("");
+				}
+			}
+			var obj = Object.create(ctor.prototype);
+			ctor.apply(obj, args);
+			return st.source.success(0, obj);
+		});
+	}	
+
+
 	///////////////////////////////////////////////////////////////////////////////////////
 	// Build-in Parsees
 	/////////////////////////////////////////////////////////////////////////////////////////
+
+	export function lazy(f:()=>Parser): Parser{
+		return new Parser("log", (source)=>{
+			return f().parse(source);
+		});
+	}
 
 
 	export function log(f:(state:number)=>void): Parser{
