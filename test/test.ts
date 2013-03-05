@@ -281,3 +281,11 @@ test("expr test 3", ()=>{
 	var expected = Parsect.State.success(source, 23, 168);
 	ok(parser.parse(source).equals(expected));
 });
+
+test("apply 3", ()=>{
+	var pNumber = map(parseFloat, Parsect.digit);
+	var parser = Parsect.apply((x,y)=>x+y, [pNumber], [string(" "), pNumber]); 
+	var source = "5 9";
+	var expected = Parsect.State.success(source, 3, 14);
+	ok(parser.parse(source).equals(expected));
+});
