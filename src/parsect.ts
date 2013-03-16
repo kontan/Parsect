@@ -11,20 +11,25 @@ module Parsect{
 	 * class Parser<T>
 	 */
 	export class Parser{
-		constructor(public name:string, private _parse:(source:Source)=>State, public expected?:string){
-
-			// 今のところ動いてるけど、これがあると parse をほかの関数に渡した時に起こる無限再帰を回避できる場合がある
-			// this の意味が変わったのが原因？
-			//this.parse = (arg)=>{ return (arg instanceof Source) ? _parse(arg) : _parse(new Source(arg)); };
-		
+		constructor(public name:string, public parse:(source:Source)=>State, public expected?:string){
 		}
+	}
 
-		parse(source:Source):State; 
-		parse(source:string):State;
-		parse(arg:any):State{
-			// unused
-			return arg instanceof Source ? this._parse(arg) : this._parse(new Source(arg));
-		}
+	export function parse(parser: Parser, input: string): State;
+	export function parse(parser: Parser, input: Source): State;
+	export function parse(parser: string, input: string): State;
+	export function parse(parser: string, input: Source): State;
+	export function parse(parser: String, input: string): State;
+	export function parse(parser: String, input: Source): State;	
+	export function parse(parser: RegExp, input: string): State;
+	export function parse(parser: RegExp, input: Source): State;		
+	export function parse(parser: any, input: any): State{
+		var p = parser instanceof Parser ? parser :
+		        parser instanceof String ? string(parser) :
+		        parser instanceof RegExp ? regexp(parser) :
+		        string(parser);
+		var i = input instanceof Source ? input : new Source(input);
+		return p.parse(i);
 	}
 
 	/**
@@ -114,6 +119,7 @@ module Parsect{
 	export interface Context{
 		(p:Parser):any;
 		(s:string):string;
+
 		getUserState(): any;
 		notFollowedBy:(p:Parser)=>void;
 		peek():string;	// for debugging
@@ -125,6 +131,9 @@ module Parsect{
 	// Parser Builders
 	////////////////////////////////////////////////////////////////////////////////////
 
+	/**
+	 * string : (text: string) => Parser<string> 
+	 */
 	export function string(text:string):Parser{
 		return new Parser(
 			"string \"" + text + "\"", 
@@ -133,6 +142,9 @@ module Parsect{
 		);
 	}
 
+	/**
+	 * regexp : (pattern: RegExp) => Parser<string>
+	 */
 	export function regexp(pattern:RegExp):Parser{
 		return new Parser("regexp \"" + pattern + "\"", (s:Source)=>{
 			var input = s.source.slice(s.position);
@@ -171,19 +183,19 @@ module Parsect{
 	//////////////////////////////////////////////////////////////////////////////////////
 
 	// seq:(f(s:Context)=>T)=>Parser<T>
-	export function seq(f:(s:Context)=>any):Parser{
+	export function seq(f:(s:Context, o:any)=>any):Parser{
 		return new Parser("seq", (source:Source)=>{
 			var st:State = source.success();
 			var s:Context = <any>(a:any)=>{
 				if(st.success){
-					st = (a instanceof Parser ? a : string(a)).parse(st.source);
+					st = parse(a, st.source);
 					if(st.success){ 
 						return st.value; 
 					}
 				}
 			};
 			s.notFollowedBy = (p:Parser)=>{
-				var _st = p.parse(st.source);
+				var _st = parse(p, st.source);
 				if(_st.success){
 					st = st.source.fail('unexpected ' + p.expected);
 				}
@@ -192,7 +204,11 @@ module Parsect{
 			s.success = ()=> st.success;
 			s.peek  = ()=> st.source.source.slice(st.source.position, st.source.position + 128);
 			s.result  = ()=> st.value;
-			var r = f(s);
+			var o = {};
+			var r = f(s, o);
+			if(r === undefined){
+				r = o;
+			}
 			return s.success() ? (r !== undefined ? st.source.success(0, r) : st) : st;
 		});
 	}
@@ -200,7 +216,7 @@ module Parsect{
 	// trying:(p:Parser<T>)=>Parser<T>
 	export function trying(p:Parser):Parser{
 		return new Parser('tring', (source:Source)=>{
-			var st = p.parse(source);
+			var st = parse(p, source);
 			return st.success ? st : source.fail(st.errorMesssage);
 		});
 	}
@@ -212,8 +228,25 @@ module Parsect{
 		return new Parser("series", (source:Source)=>{
 			var st:State = source.success();
 			for(var i = 0; i < ps.length && st.success; i++){
-				var _st = ps[i].parse(st.source);
+				var _st = parse(ps[i], st.source);
 				if(_st.success){ 
+					st = _st;
+				}else{
+					return st.source.fail(_st.errorMesssage);
+				}
+			}
+			return st.success ? st : st.source.fail();
+		});
+	}
+
+	export function seqencial(ps:Parser[], action?:(x:any)=>any, finish?:(x:any)=>any):Parser{
+		return new Parser("series", (source:Source)=>{
+			var st:State = source.success();
+			var values:any[] = [];
+			for(var i = 0; i < ps.length && st.success; i++){
+				var _st = parse(ps[i], st.source);
+				if(_st.success){ 
+					var value = action(_st.value);
 					st = _st;
 				}else{
 					return st.source.fail(_st.errorMesssage);
@@ -227,7 +260,7 @@ module Parsect{
 		return new Parser("series", (source:Source)=>{
 			var st:State = source.success();
 			for(var i = 0; i < ps.length && st.success; i++){
-				var _st = ps[i].parse(st.source);
+				var _st = parse(ps[i], st.source);
 				if(_st.success){ 
 					st = _st;
 				}else{
@@ -246,12 +279,15 @@ module Parsect{
 	}
 
 	// count:(n:number, p:Parser<T>):Parser<T[]>
-	export function count(n:number, p:Parser):Parser{
+	export function count(n:number, p:Parser):Parser;
+	export function count(n:number, p:String):Parser;
+	export function count(n:number, p:RegExp):Parser;
+	export function count(n:number, p:any):Parser{
 		return new Parser("count " + n, (s:Source)=>{
 			var st = s.success();
 			var results:any[] = [];
 			for(var i = 0; i < n; i++){
-				var _st = p.parse(st.source);
+				var _st = parse(p, st.source);
 				if(_st.success){
 					st = _st;
 					results.push(st.value);
@@ -264,12 +300,15 @@ module Parsect{
 	}
 
 	// many:(p:Parser<T>):Parser<T[]>
-	export function many(p:Parser):Parser{
+	export function many(p:Parser):Parser;
+	export function many(p:String):Parser;
+	export function many(p:RegExp):Parser;
+	export function many(p:any):Parser{
 		return new Parser("many", (s:Source)=>{
 			var st = s.success();
 			var results = [];
 			for(var i = 0; true; i++){
-				var _st = p.parse(st.source);
+				var _st = parse(p, st.source);
 				if(_st.success){
 					st = _st;
 					results.push(st.value);
@@ -283,13 +322,16 @@ module Parsect{
 	}
 
 	// many1:(p:Parser<T>):Parser<T[]>
-	export function many1(p:Parser):Parser{
+	export function many1(p:Parser):Parser;
+	export function many1(p:String):Parser;
+	export function many1(p:RegExp):Parser;
+	export function many1(p:any):Parser{
 		return new Parser("many1", (s:Source)=>{
 			var st = s.success();
 			var results = [];
 			var i = 0;
 			for(var i = 0; true; i++){
-				var _st = p.parse(st.source);
+				var _st = parse(p, st.source);
 				if(_st.success){
 					st = _st;
 					results.push(st.value);
@@ -302,11 +344,25 @@ module Parsect{
 	}
 
 	// or:(...ps:Parser<T>[]):Parser<T>
-	export function or(...ps:Parser[]):Parser{
+
+	export function or(p:Parser):Parser;
+	export function or(p:String):Parser;
+	export function or(p:RegExp):Parser;
+	export function or(p:Parser, q:Parser):Parser;
+	export function or(p:String, q:Parser):Parser;
+	export function or(p:RegExp, q:Parser):Parser;
+	export function or(p:Parser, q:String):Parser;
+	export function or(p:String, q:String):Parser;
+	export function or(p:RegExp, q:String):Parser;
+	export function or(p:Parser, q:RegExp):Parser;
+	export function or(p:String, q:RegExp):Parser;
+	export function or(p:RegExp, q:RegExp):Parser;			
+	export function or(...ps:Parser[]):Parser;
+	export function or(...ps:any[]):Parser{
 		var ps:Parser[] = <any>arguments;
 		return new Parser("or", (source:Source)=>{
 			for(var i = 0; i < ps.length; i++){
-				var st = ps[i].parse(source);
+				var st = parse(ps[i], source);
 				if(st.success){
 					return st;
 				}else if(st.source.position != source.position){
@@ -318,36 +374,45 @@ module Parsect{
 	}
 
 	// option:(def:T, p:Parser<T>):Parser<T>
-	export function option(defaultValue:any, p:Parser):Parser{
+	export function option(defaultValue:any, p:Parser):Parser;
+	export function option(defaultValue:any, p:string):Parser;
+	export function option(defaultValue:any, p:RegExp):Parser;
+	export function option(defaultValue:any, p:any):Parser{
 		if( ! p){
 			throw "Parsect.option: invalid argument: p";
 		}
 		return new Parser("option", (source:Source)=>{
-			var st = p.parse(source);
+			var st = parse(p, source);
 			return st.success ? st : source.success(0, defaultValue);
 		});
 	}
 
 	// optional:(p:Parser<T>):Parser<T>
-	export function optional(p:Parser):Parser{
-		return new Parser("optional", (source:Source)=>option(undefined, p).parse(source));
+	export function optional(p:Parser):Parser;
+	export function optional(p:string):Parser;
+	export function optional(p:RegExp):Parser;
+	export function optional(p:any):Parser{
+		return option(undefined, p);
 	}
 
 	export function notFollowedBy(value:any, p:Parser):Parser{
 		return new Parser("notFollowedBy " + p.name, (source:Source)=>{
-			var st = p.parse(source);
+			var st = parse(p, source);
 			return st.success ? State.success(source, value) : st.source.fail('not expected ' + p.expected);
 		});
 	}
 
-	export function map(f:(v:any)=>any, p:Parser){
+	export function map(f:(v:any)=>any, p:Parser): Parser;
+	export function map(f:(v:any)=>any, p:String): Parser;
+	export function map(f:(v:any)=>any, p:RegExp): Parser;
+	export function map(f:(v:any)=>any, p:any): Parser{
 		return new Parser("map(" + p.name + ")", (source:Source)=>{
-			var st = p.parse(source);
+			var st = parse(p, source);
 			return st.success ? st.source.success(0, f(st.value)) : st;
 		});
 	}
 
-	export var sepBy1 = (p:Parser, sep:Parser)=>new Parser("sepBy1", (source:Source)=>{
+	export function sepBy1(p:Parser, sep:Parser): Parser{
 		return seq((s)=>{
 			var x = s(p);
 			var xs = s(many(series(sep, p)));
@@ -355,37 +420,74 @@ module Parsect{
 				xs.unshift(x);
 				return xs;
 			}
-		}).parse(source);
-	});
+		});
+	}
 
 	export var sepBy = (p:Parser, sep:Parser)=>new Parser("sepBy", (source:Source)=>{
-		return or(sepBy1(p, sep), map(()=>[], empty)).parse(source);
+		return parse(or(sepBy1(p, sep), map(()=>[], empty)), source);
 	});	
 
 	export var endBy1 = (p:Parser, sep:Parser)=>new Parser("endBy1", (source:Source)=>{
 		var q = seq((s)=>{ var x = s(p); s(sep); return x; });
-		return seq((s)=>{
+		return parse(seq((s)=>{
 			var x = s(q);
 			var xs = s(many(q));
 			if(s.success()){
 				xs.unshift(x);
 				return xs;
 			} 
-		}).parse(source); 
+		}), source); 
 	});
 
 	export var endBy = (p:Parser, sep:Parser)=>new Parser("endBy", (source:Source)=>{
-		return or(endBy1(p, sep), empty).parse(source);
+		return parse(or(endBy1(p, sep), empty), source);
 	});
 
 	// between:(open:Parser, close:Parser, p:Parser)=>Parser
-	export var between = (open:Parser, p:Parser, close:Parser)=>seq((s)=>{
-		if( ! (open && p && close) ) throw "Parsect.between: Invalid argument:";
-		s(open);
-		var v = s(p);
-		s(close);
-		return v;
-	});	
+	export function between(open:Parser, p:Parser, close:Parser): Parser;
+	export function between(open:Parser, p:Parser, close:String): Parser;
+	export function between(open:Parser, p:Parser, close:RegExp): Parser;
+	export function between(open:Parser, p:String, close:Parser): Parser;
+	export function between(open:Parser, p:String, close:String): Parser;
+	export function between(open:Parser, p:String, close:RegExp): Parser;
+	export function between(open:Parser, p:RegExp, close:Parser): Parser;
+	export function between(open:Parser, p:RegExp, close:String): Parser;
+	export function between(open:Parser, p:RegExp, close:RegExp): Parser;
+	export function between(open:String, p:Parser, close:Parser): Parser;
+	export function between(open:String, p:Parser, close:String): Parser;
+	export function between(open:String, p:Parser, close:RegExp): Parser;
+	export function between(open:String, p:String, close:Parser): Parser;
+	export function between(open:String, p:String, close:String): Parser;
+	export function between(open:String, p:String, close:RegExp): Parser;
+	export function between(open:String, p:RegExp, close:Parser): Parser;
+	export function between(open:String, p:RegExp, close:String): Parser;
+	export function between(open:String, p:RegExp, close:RegExp): Parser;
+	export function between(open:RegExp, p:Parser, close:Parser): Parser;
+	export function between(open:RegExp, p:Parser, close:String): Parser;
+	export function between(open:RegExp, p:Parser, close:RegExp): Parser;
+	export function between(open:RegExp, p:String, close:Parser): Parser;
+	export function between(open:RegExp, p:String, close:String): Parser;
+	export function between(open:RegExp, p:String, close:RegExp): Parser;
+	export function between(open:RegExp, p:RegExp, close:Parser): Parser;
+	export function between(open:RegExp, p:RegExp, close:String): Parser;
+	export function between(open:RegExp, p:RegExp, close:RegExp): Parser;
+	export function between(open:any, p:any, close:any): Parser{
+		return seq((s)=>{
+			if( ! (open && p && close) ) throw "Parsect.between: Invalid argument:";
+			s(open);
+			var v = s(p);
+			s(close);
+			return v;
+		});	
+	}
+
+	export function whole(p:any): Parser{
+		return new Parser("whole", (source:Source)=>{
+			var pos = source.position;
+			var _st = parse(p, source);
+			return _st.success ? source.success(0, source.source.slice(pos, _st.position)) : _st;
+		});
+	}	
 
 	/////////////////////////////////////////////////////////////////////////////////
 	// Applycative-like style utils
@@ -396,7 +498,7 @@ module Parsect{
 			var args:any[] = [];
 			var st:State = source.success();
 			for(var i = 0; i < parserSeq.length; i++){
-				var _st:State = stream(parserSeq[i]).parse(st.source);
+				var _st:State = parse(stream(parserSeq[i]), st.source);
 				if(_st.success){
 					st = _st;
 					args.push(_st.value);
@@ -422,7 +524,7 @@ module Parsect{
 			var args:any[] = [];
 			var st:State = source.success();
 			for(var i = 0; i < parserSeq.length; i++){
-				var _st:State = stream(parserSeq[i]).parse(st.source);
+				var _st:State = parse(stream(parserSeq[i]), st.source);
 				if(_st.success){
 					st = _st;
 					args.push(_st.value);
@@ -442,7 +544,7 @@ module Parsect{
 
 	export function lazy(f:()=>Parser): Parser{
 		return new Parser("log", (source)=>{
-			return f().parse(source);
+			return parse(f(), source);
 		});
 	}
 
@@ -473,5 +575,126 @@ module Parsect{
 	// Misc
 	export var number:Parser; // :Parser<number>
 	number = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
+
+
+
+	// Util ////////////////////////////////////////////////////////////
+
+	export function jsonEq(a:any, b:any){
+		if(a === undefined && b === undefined){
+			return true;
+		}else if(
+			(typeof(a) === "bool"  ) || (typeof(b) === "bool"  ) ||
+			(typeof(a) === "string") || (typeof(b) === "string") ||
+			(typeof(a) === "number") || (typeof(b) === "number") ||
+			(a === undefined) || (b === undefined) ||
+			(a === null) || (b === null)
+		){
+			return a === b;
+		}else{
+			var f = true;
+			for(var x in a){
+				f = f && (x in b && jsonEq(a[x], b[x]) || true);
+			}
+			for(var x in b){
+				f = f && (x in a && jsonEq(b[x], a[x]) || true);
+			}
+		}
+		return f;
+	}
+
+
+
+
+
+
+
+
+
+
+	/*
+
+
+	export class Seeker{
+		public success: bool = true;
+		constructor(public source: string, public position?: number = 0){
+		}
+	}
+
+	export interface ASTEmitter{
+		parse(): any;
+	}
+
+	export class Branch{
+		constructor(name: string, parser:ASTEmitter){
+		}
+
+	}
+
+	export class Choice implements ASTEmitter{
+		constructor(branches: Branch[]){
+		}
+		constructor(...branches: Branch[]){
+		}
+		parse(seeker: Seeker): any{
+			var initialPosition: number = seeker.position;
+			for(var i = 0; i < this.branches.length; i++){
+				var branch: Branch = this.branches[i];
+				var value = branch.parse(seeker);
+				if(current.success){
+					return { "type": branch.name, "value": value }; 
+				}else if(seeker.position != initialPosition){
+					return undefined;
+				}else{
+					seeker.success = true;
+				}
+			}
+			seeker.success = false;
+			return undefined;
+		}
+	}
+
+	export class Car{
+		constructor(public parser:Parser, public visible?: bool = true){
+		}
+	}
+
+	function car(p: Parser): Car{
+		return new Car(p, true);
+	}
+	function ucar(): Car{
+		return new Car(p, false);
+	}
+	function ceof(): Car{
+	}
+
+	export class Sequence implements ASTEmitter{
+		constructor(...cars: Car[]){
+		}
+		parse(): any{
+
+		}
+	}
+
+
+
+	var data = seq("data", pIdentifier, "=", car ]);
+
+	// ["hoge", ]
+
+
+	// choice(
+	//     branch("foo", string("foo")), 
+	//     branch("bar", string("bar"))
+	// );
+	//
+	// { "type": "foo", "value": "foo" }
+	// { "type": "bar", "value": "bar" }
+
+
+	*/
+
+
 }
+
 

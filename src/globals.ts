@@ -5,6 +5,8 @@
 
 var Source = Parsect.Source;
 
+var parse    = Parsect.parse;
+
 var ret      = Parsect.ret;
 var seq      = Parsect.seq;
 var many     = Parsect.many;

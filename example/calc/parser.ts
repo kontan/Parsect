@@ -15,14 +15,19 @@ var expr = seq((s)=>{
 		seq((s)=>{	
 			s(tok_plus);
 			var e = s(expr);
-			return v + e;
+			if(s.success()){
+				v = v + e;
+			}
 		}),
 		seq((s)=>{
 			s(tok_minus);
 			var e = s(expr);
-			return v - e;
+			if(s.success()){
+				v = v - e;
+			}
 		})
 	)));
+	return v;
 });
 
 // term := factor ("*" term | "/" term)?
@@ -32,14 +37,19 @@ var term = seq((s)=>{
 		seq((s)=>{
 			s(tok_mul);
 			var t = s(term);
-			return v * t;
+			if(s.success()){
+				v = v * t;
+			}
 		}),
 		seq((s)=>{
 			s(tok_div);
 			var t = s(term);
-			return v / t;
+			if(s.success()){
+				v = v / t;
+			}
 		})
 	)));
+	return v;
 });
 
 // factor = "(" expr ")"  |  number
