@@ -116,15 +116,36 @@ module Parsect{
 		column:number;
 	}
 
+	/**
+	 * seq のコンテキストオブジェクト。
+	 */
 	export interface Context{
+		
+		/**
+		 * パーサをこのコンテキストで実行し、そのパーサの意味値を返します。
+		 * パースが失敗した場合は undefined を返します。
+		 * コンテキストが失敗している場合は、パースは実行されず undefined が返ります。
+		 */
 		(p:Parser):any;
 		(s:string):string;
+		(p:RegExp):string;
 
+		/**
+		 * 現在のコンテキストのユーザ状態。自由に書き込み、読み込みが可能です。
+		 */
 		getUserState(): any;
+
+
 		notFollowedBy:(p:Parser)=>void;
 		peek():string;	// for debugging
 		success():bool;   // for debugging
 		result():any;     // for debugging
+
+		/**
+		 * このコンテキストの意味値。デフォルトでは空のオブジェクト。
+		 * ただし、seq コールバックが undefined 以外の値を返す場合は、out メンバ変数は無視され、その返り値が意味値となる。 
+		 */
+		out: any;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////
@@ -183,6 +204,12 @@ module Parsect{
 	//////////////////////////////////////////////////////////////////////////////////////
 
 	// seq:(f(s:Context)=>T)=>Parser<T>
+	/**
+	 * seq コンテキストオブジェクトを介して、パーサを順に適用します。
+	 * パラメータ f の引数 s は 
+	 * 
+	 * @param f コンテキストを実行するコールバック。
+	 */
 	export function seq(f:(s:Context, o:any)=>any):Parser{
 		return new Parser("seq", (source:Source)=>{
 			var st:State = source.success();
@@ -204,10 +231,10 @@ module Parsect{
 			s.success = ()=> st.success;
 			s.peek  = ()=> st.source.source.slice(st.source.position, st.source.position + 128);
 			s.result  = ()=> st.value;
-			var o = {};
-			var r = f(s, o);
+			s.out = {};
+			var r = f(s, s.out);
 			if(r === undefined){
-				r = o;
+				r = s.out;
 			}
 			return s.success() ? (r !== undefined ? st.source.success(0, r) : st) : st;
 		});
