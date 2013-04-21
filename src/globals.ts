@@ -23,7 +23,6 @@ var endBy    = Parsect.endBy;
 var between  = Parsect.between;
 var trying   = Parsect.trying;
 var satisfy  = Parsect.satisfy;
-
 var eof      = Parsect.eof;
 var empty    = Parsect.empty;
 var string   = Parsect.string;

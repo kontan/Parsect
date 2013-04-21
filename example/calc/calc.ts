@@ -1,8 +1,8 @@
 // Parsect (https://github.com/kontan/Parsect)
 // @author Kon - http://phyzkit.net/
 
-/// <reference path="../../src/parsect.ts" /> 
-/// <reference path="parser.ts" /> 
+// /// <reference path="../../src/parsect.ts" /> 
+// /// <reference path="parser.ts" /> 
 
 var exprInput:any = document.querySelector("#expression");
 var resultSpan:any = document.querySelector("#result");
