@@ -2,6 +2,21 @@
 /// <reference path="../src/parsect.ts" />
 /// <reference path="../src/globals.ts" />
 
+
+var x: (n:number)=>number;
+
+interface C<T>{
+}
+function f<S,T>(s:C<S>, t:C<T>){
+}   
+var a: C<string>;
+//f(a, a);                // NG
+//f<string,string>(a, a); // OK
+
+
+
+
+
 var jsonEq = Parsect.jsonEq;
 
 function join(ss:string[]): string{
@@ -38,14 +53,14 @@ test("parse function test", function() {
     // Success
     var s = parse(parser, new Source("hoge"));
     ok(s.success);
-      strictEqual(s.position, 4);
+      strictEqual(s.source.position, 4);
       strictEqual(s.value, "hoge");
       strictEqual(s.errorMesssage, undefined);
 
     // Success
     var s = parse(parser, "hoge");
     ok(s.success);
-      strictEqual(s.position, 4);
+      strictEqual(s.source.position, 4);
       strictEqual(s.value, "hoge");
       strictEqual(s.errorMesssage, undefined);
 });
@@ -56,28 +71,28 @@ test("string parser test", function() {
     // Success
     var s = parse(parser, "hoge");
     ok(s.success);
-      strictEqual(s.position, 4);
+      strictEqual(s.source.position, 4);
       strictEqual(s.value, "hoge");
       strictEqual(s.errorMesssage, undefined);
 
       // Fail
     var f = parse(parser, "piyo");
     ok(!f.success);
-      strictEqual(f.position, 0);
+      strictEqual(f.source.position, 0);
       strictEqual(f.value, undefined);
       strictEqual(f.errorMesssage, "expected \"hoge\""); 
 
     // Fail
     var f = parse(parser, "hopo");
     ok(!f.success);
-      strictEqual(f.position, 0);
+      strictEqual(f.source.position, 0);
       strictEqual(f.value, undefined);
       strictEqual(f.errorMesssage, "expected \"hoge\""); 
 
       // Fail
     var e = parse(parser, "");
     ok(!e.success);
-      strictEqual(e.position, 0);
+      strictEqual(e.source.position, 0);
       strictEqual(e.value, undefined);
       strictEqual(e.errorMesssage, "expected \"hoge\""); 
 });
@@ -98,14 +113,14 @@ test("seq parser test", function() {
     // Success
     var s = parse(parser, "(hoge)");
     ok(s.success);
-      strictEqual(s.position, 6);
+      strictEqual(s.source.position, 6);
       ok(jsonEq(s.value, { 'e': 'hoge' }));
       strictEqual(s.errorMesssage, undefined);
 
       // Fail
     var f = parse(parser, "(piyo)");
     ok(!f.success);
-      strictEqual(f.position, 1);
+      strictEqual(f.source.position, 1);
       strictEqual(f.value, undefined);
       strictEqual(f.errorMesssage, "expected \"hoge\""); 
 });
@@ -149,7 +164,7 @@ test("seq parser json ast test", function() {
     var input = "indexOf(searchString:string,position?:number):number";
     var s = parse(parser, input);
     ok(s.success);
-      strictEqual(s.position, input.length);
+      strictEqual(s.source.position, input.length);
       ok(jsonEq(s.value, { 
       	'name': 'indexOf', 
       	'args': [ 
@@ -294,7 +309,7 @@ test("satisfy test 1", ()=>{
         return i >= 80 && i <= 85;
     })));; 
     var source = "XXXXXXXXXXXX";
-    var expected = Parsect.newFailState(source, 0, 'expected one or more (satisfy)');
+    var expected = Parsect.newFailState(source, 0, '');
     ok(parse(parser, source).equals(expected));
 });
 
