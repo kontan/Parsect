@@ -1,5 +1,5 @@
+--target ES5
+src/prelude.ts
 src/parsect.ts
 src/globals.ts
-example/calc/parser.ts
-example/calc/calc.ts
 test/test.ts
