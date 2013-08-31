@@ -85,7 +85,7 @@ test("seq parser test", function() {
 
       // Fail
     var source = "(piyo)";
-    var expected2: Parsect.State<undefined> = Parsect.newFailureState(source, 1, "expected \"hoge\"");
+    var expected2: Parsect.State<any> = Parsect.newFailureState(source, 1, "expected \"hoge\"");
     ok(parse(parser, source).equals(expected2));
 });
 

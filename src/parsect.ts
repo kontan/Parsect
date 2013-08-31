@@ -18,7 +18,7 @@ module Parsect{
         /// create new parser.
         /// @param parse parsing function
         /// @param expecting human-readable string description that this parser expecting. 
-        constructor(public parse: Func1<Source, State<T>>, private expecting?:string){
+        constructor(public parse: (source: Source)=>State<T>, private expecting?:string){
         }
     }
 
@@ -45,7 +45,7 @@ module Parsect{
         if( ! p) throw new Error();
         return p.parse(i);
     }
- 
+
     export class State<T>{ 
         source: Source;
         success: boolean;
@@ -63,7 +63,7 @@ module Parsect{
             this.errorMesssage = errorMesssage;
         }
 
-        equals(st:State):boolean{
+        equals(st:State<T>):boolean{
             return st &&
                    this.source.equals(st.source)     && 
                    this.success       === st.success &&
@@ -79,12 +79,12 @@ module Parsect{
         return new State(source, true, value, undefined);
     }
 
-    export function newFailureState(source:Source, errorMesssage:string):State<undefined>;
-    export function newFailureState(source:string, position:number, errorMesssage:string):State<undefined>;
-    export function newFailureState(arg0:any, arg1:any, arg2?:any): any {
+    export function newFailureState<T>(source:Source, errorMesssage:string):State<T>;
+    export function newFailureState<T>(source:string, position:number, errorMesssage:string):State<T>;
+    export function newFailureState<T>(arg0:any, arg1:any, arg2?:any): any {
         var source  = arg0 instanceof Source ? arg0 : new Source(arg0, arg1);
         var message = arg0 instanceof Source ? arg1 : arg2;
-        return new State<undefined>(source, false, undefined, message);
+        return new State<void>(source, false, undefined, message);
     }
 
     export class Source{ 
@@ -105,7 +105,7 @@ module Parsect{
             return newSuccessState(new Source(this.source, this.position + delta, this.userData), value);
         }
 
-        fail(message?: string): State<undefined>{
+        fail<T>(message?: string): State<T>{
             return newFailureState(this, message);
         }
 
@@ -164,8 +164,8 @@ module Parsect{
         // ここもこっちの定義が正しいと思うけど、コンパイル通らない件
         //function stringParser(s: Source): State<string> {
 
-        function stringParser(s: Source): any {
-            return s.source.indexOf(text, s.position) === s.position ? s.success(text.length, text) : s.fail("expected \"" + text + "\"");
+        function stringParser(s: Source): State<string> {
+            return s.source.indexOf(text, s.position) === s.position ? s.success(text.length, text) : s.fail<string>("expected \"" + text + "\"");
         }
         return new Parser<string>(stringParser, "\"" + text + "\"");
     }
@@ -220,8 +220,8 @@ module Parsect{
     /// 
     export function seq<T>(f: (s: Context<T>, o: T)=>void): Parser<T>{
         function seqParser(source: Source): State<T> {
-            var st:State = source.success();
-            var s:Context = <Context> ((a:any)=>{
+            var st:State<T> = source.success();
+            var s:Context<T> = <Context<T>> ((a:any)=>{
                 if(st.success){
                     st = parse(a, st.source);
                     if(st.success){ 
@@ -229,7 +229,7 @@ module Parsect{
                     }
                 }
             });
-            s.notFollowedBy = (p:Parser)=>{
+            s.notFollowedBy = (p:Parser<T>)=>{
                 var _st = parse(p, st.source);
                 if(_st.success){
                     st = st.source.fail('unexpected charactor');
@@ -239,12 +239,12 @@ module Parsect{
             s.success = ()=> st.success;
             s.peek  = ()=> st.source.source.slice(st.source.position, st.source.position + 128);
             s.result  = ()=> st.value;
-            s.out = {};
-            var r = f(s, s.out);
+            s.out = <T> {};
+            var r: any = f(s, s.out);
             if(r === undefined){
-                r = s.out;
+                r = <any> s.out;
             }
-            return s.success() ? (r !== undefined ? st.source.success(0, r) : st) : st;
+            return s.success() ? (r !== undefined ? st.source.success<T>(0, r) : st) : st;
         }
         return new Parser<T>(seqParser);
     }
@@ -283,10 +283,10 @@ module Parsect{
     }
 
     /// head(a, b, c, ...) parses a, b, c and etc, and returns new parser of `a`.
-    export function head<A>(a:Parser<A>, ...ps:Parser[]): Parser<A>;
-    export function head(a:string, ...ps:Parser[]): Parser<string>;    
-    export function head(a:RegExp, ...ps:Parser[]): Parser<string>;    
-    export function head(a:any, ...ps:Parser[]): Parser {
+    export function head<A>(a:Parser<A>, ...ps:Parser<any>[]): Parser<A>;
+    export function head(a:string, ...ps:Parser<any>[]): Parser<string>;    
+    export function head(a:RegExp, ...ps:Parser<any>[]): Parser<string>;    
+    export function head(a:any, ...ps:Parser<any>[]): Parser {
         function headParser(source: Source){
             var st:State = source.success();
             for(var i = 0; i < ps.length && st.success; i++){
@@ -302,9 +302,9 @@ module Parsect{
         return new Parser(headParser);
     }
 
-    export function take1<A,B>(a:Parser<A>, b:Parser<B>, ...ps:Parser[]):Parser<B>{
+    export function take1<A,B>(a:Parser<A>, b:Parser<B>, ...ps:Parser<any>[]):Parser<B>{
         function take2Parser(source:Source){
-            var st:State = source.success();
+            var st:State<B> = source.success();
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
                 if(_st.success){ 
@@ -321,7 +321,7 @@ module Parsect{
     /// stream parser receives an array of Parser and consumes those parser input sequentially.
     export function stream<T>(ps: Parser<T>[]): Parser<T> {
         function streamparser(source:Source){
-            var st:State = source.success();
+            var st:State<T> = source.success();
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
                 if(_st.success){ 
@@ -422,7 +422,7 @@ module Parsect{
     export function or(p:String,         q:RegExp        ): Parser<string>;
     export function or(p:RegExp,         q:RegExp        ): Parser<string>;            
     export function or(...ps:any[]): Parser<any> {
-        var ps:Parser[] = <any>arguments;
+        var ps:Parser<any>[] = <any>arguments;
         function orParser(source: Source){
             for(var i = 0; i < ps.length; i++){
                 var st = parse(ps[i], source);
@@ -485,12 +485,12 @@ module Parsect{
         return new Parser(mapParser);
     }
 
-    export function sepBy1<T>(p: Parser<T>, sep: Parser): Parser<T[]>;
+    export function sepBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]>;
     export function sepBy1<T>(p: Parser<T>, sep: string): Parser<T[]>;
     export function sepBy1<T>(p: Parser<T>, sep: RegExp): Parser<T[]>;        
-    export function sepBy1(p: string, sep: Parser): Parser<string[]>;
+    export function sepBy1(p: string, sep: Parser<any>): Parser<string[]>;
     export function sepBy1(p: string, sep: string): Parser<string[]>;    
-    export function sepBy1(p: RegExp, sep: Parser): Parser<string[]>;
+    export function sepBy1(p: RegExp, sep: Parser<any>): Parser<string[]>;
     export function sepBy1(p: string, sep: RegExp): Parser<string[]>;
     export function sepBy1(p: RegExp, sep: string): Parser<string[]>;
     export function sepBy1(p: RegExp, sep: RegExp): Parser<string[]>;
@@ -508,13 +508,13 @@ module Parsect{
         return new Parser(sepBy1parser);
     }
 
-    export function sepBy<T>(p:Parser<T>, sep:Parser): Parser<T[]>;    
+    export function sepBy<T>(p:Parser<T>, sep:Parser<any>): Parser<T[]>;    
     export function sepBy<T>(p:Parser<T>, sep:string): Parser<T[]>;
     export function sepBy<T>(p:Parser<T>, sep:RegExp): Parser<T[]>;
-    export function sepBy(p:string, sep:Parser): Parser<string[]>;
+    export function sepBy(p:string, sep:Parser<any>): Parser<string[]>;
     export function sepBy(p:string, sep:string): Parser<string[]>;    
     export function sepBy(p:string, sep:RegExp): Parser<string[]>;
-    export function sepBy(p:RegExp, sep:Parser): Parser<string[]>;
+    export function sepBy(p:RegExp, sep:Parser<any>): Parser<string[]>;
     export function sepBy(p:RegExp, sep:string): Parser<string[]>;
     export function sepBy(p:RegExp, sep:RegExp): Parser<string[]>;
     export function sepBy(p:any, sep:any): Parser<any[]>{
@@ -524,13 +524,13 @@ module Parsect{
         return new Parser(sepByParser);
     }
 
-    export function endBy1<T>(p: Parser<T>, sep: Parser): Parser<T[]>;
+    export function endBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]>;
     export function endBy1<T>(p: Parser<T>, sep: string): Parser<T[]>;
     export function endBy1<T>(p: Parser<T>, sep: RegExp): Parser<T[]>;
-    export function endBy1(p: string, sep: Parser): Parser<string[]>;
+    export function endBy1(p: string, sep: Parser<any>): Parser<string[]>;
     export function endBy1(p: string, sep: string): Parser<string[]>;
     export function endBy1(p: string, sep: RegExp): Parser<string[]>;
-    export function endBy1(p: RegExp, sep: Parser): Parser<string[]>;
+    export function endBy1(p: RegExp, sep: Parser<any>): Parser<string[]>;
     export function endBy1(p: RegExp, sep: string): Parser<string[]>;
     export function endBy1(p: RegExp, sep: RegExp): Parser<string[]>;
     export function endBy1(p: any, sep: any): Parser<any>{
@@ -548,13 +548,13 @@ module Parsect{
         return new Parser(endBy1Parser);
     }
 
-    export function endBy<T>(p: Parser<T>, sep: Parser): Parser<T[]>;
+    export function endBy<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]>;
     export function endBy<T>(p: Parser<T>, sep: string): Parser<T[]>;
     export function endBy<T>(p: Parser<T>, sep: RegExp): Parser<T[]>;
-    export function endBy(p: string, sep: Parser): Parser<string[]>;
+    export function endBy(p: string, sep: Parser<any>): Parser<string[]>;
     export function endBy(p: string, sep: string): Parser<string[]>;
     export function endBy(p: string, sep: RegExp): Parser<string[]>;
-    export function endBy(p: RegExp, sep: Parser): Parser<string[]>;
+    export function endBy(p: RegExp, sep: Parser<any>): Parser<string[]>;
     export function endBy(p: RegExp, sep: string): Parser<string[]>;
     export function endBy(p: RegExp, sep: RegExp): Parser<string[]>;
     export function endBy(p: any, sep: any): Parser<any> {
@@ -564,31 +564,31 @@ module Parsect{
         return new Parser(endByFunction);
     }
 
-    export function between<T>(open:Parser, p:Parser<T>, close:Parser): Parser<T>;
-    export function between<T>(open:Parser, p:Parser<T>, close:String): Parser<T>;
-    export function between<T>(open:Parser, p:Parser<T>, close:RegExp): Parser<T>;
-    export function between(open:Parser, p:String, close:Parser): Parser<string>;
-    export function between(open:Parser, p:String, close:String): Parser<string>;
-    export function between(open:Parser, p:String, close:RegExp): Parser<string>;
-    export function between(open:Parser, p:RegExp, close:Parser): Parser<string>;
-    export function between(open:Parser, p:RegExp, close:String): Parser<string>;
-    export function between(open:Parser, p:RegExp, close:RegExp): Parser<string>;
-    export function between<T>(open:String, p:Parser<T>, close:Parser): Parser<T>;
+    export function between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>): Parser<T>;
+    export function between<T>(open:Parser<any>, p:Parser<T>, close:String): Parser<T>;
+    export function between<T>(open:Parser<any>, p:Parser<T>, close:RegExp): Parser<T>;
+    export function between(open:Parser<any>, p:String, close:Parser<any>): Parser<string>;
+    export function between(open:Parser<any>, p:String, close:String): Parser<string>;
+    export function between(open:Parser<any>, p:String, close:RegExp): Parser<string>;
+    export function between(open:Parser<any>, p:RegExp, close:Parser<any>): Parser<string>;
+    export function between(open:Parser<any>, p:RegExp, close:String): Parser<string>;
+    export function between(open:Parser<any>, p:RegExp, close:RegExp): Parser<string>;
+    export function between<T>(open:String, p:Parser<T>, close:Parser<any>): Parser<T>;
     export function between<T>(open:String, p:Parser<T>, close:String): Parser<T>;
     export function between<T>(open:String, p:Parser<T>, close:RegExp): Parser<T>;
-    export function between(open:String, p:String, close:Parser): Parser<string>;
+    export function between(open:String, p:String, close:Parser<any>): Parser<string>;
     export function between(open:String, p:String, close:String): Parser<string>;
     export function between(open:String, p:String, close:RegExp): Parser<string>;
-    export function between(open:String, p:RegExp, close:Parser): Parser<string>;
+    export function between(open:String, p:RegExp, close:Parser<any>): Parser<string>;
     export function between(open:String, p:RegExp, close:String): Parser<string>;
     export function between(open:String, p:RegExp, close:RegExp): Parser<string>;
-    export function between<T>(open:RegExp, p:Parser<T>, close:Parser): Parser<T>;
+    export function between<T>(open:RegExp, p:Parser<T>, close:Parser<any>): Parser<T>;
     export function between<T>(open:RegExp, p:Parser<T>, close:String): Parser<T>;
     export function between<T>(open:RegExp, p:Parser<T>, close:RegExp): Parser<T>;
-    export function between(open:RegExp, p:String, close:Parser): Parser<string>;
+    export function between(open:RegExp, p:String, close:Parser<any>): Parser<string>;
     export function between(open:RegExp, p:String, close:String): Parser<string>;
     export function between(open:RegExp, p:String, close:RegExp): Parser<string>;
-    export function between(open:RegExp, p:RegExp, close:Parser): Parser<string>;
+    export function between(open:RegExp, p:RegExp, close:Parser<any>): Parser<string>;
     export function between(open:RegExp, p:RegExp, close:String): Parser<string>;
     export function between(open:RegExp, p:RegExp, close:RegExp): Parser<string>;
     export function between(open:any, p:any, close:any): Parser<any> {
@@ -652,7 +652,7 @@ module Parsect{
         return new Parser(lazyParser);
     }
 
-    export function log(f: (state: number)=>void): Parser<undefined>{
+    export function log(f: (state: number)=>void): Parser<void>{
         var count = 0;
         function logParser(source){
             var pos = Math.floor(100 * source.position / source.source.length);
@@ -676,7 +676,7 @@ module Parsect{
     export var alpha:    Parser<string> = regexp(/^[a-zA-Z]/);
     export var digit:    Parser<string> = regexp(/^[0-9]/);
     export var alphaNum: Parser<string> = regexp(/^[0-9a-zA-Z]/);
-
+    
     // Misc
     export var number: Parser<number> = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
 

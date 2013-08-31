@@ -25,9 +25,13 @@ module Prelude {
     export function curry<A,B,C,D,E,F,G,  R>(f: Func7<A,B,C,D,E,F,G,  R>): Func1<A, Func1<B, Func1<C, Func1<D, Func1<E, Func1<F, Func1<G,          R>>>>>>> ;
     export function curry<A,B,C,D,E,F,G,H,R>(f: Func8<A,B,C,D,E,F,G,H,R>): Func1<A, Func1<B, Func1<C, Func1<D, Func1<E, Func1<F, Func1<G, Func1<H, R>>>>>>>>;
     export function curry(f: any): any{
-        return function _curry(xs){
+        //return function _curry(xs){
+        //    return xs.length < f.length ? function(x){ return _curry(xs.concat([x])); } : f.apply(undefined, xs);
+        //}([]);
+        function _curry(xs){
             return xs.length < f.length ? function(x){ return _curry(xs.concat([x])); } : f.apply(undefined, xs);
-        }([]);
+        }
+        return _curry([]);
     }
 
     export function uncurry<A,              R>(f: Func1<A,                                                                R>       ): Func1<A,              R>;
@@ -118,7 +122,6 @@ module Prelude {
         return function(b: B, a: A){ return f(a, b); };
     }
 
-
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Tuple ////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,12 +147,34 @@ module Prelude {
     // List /////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
 
-    export function foldl<T>(xs: T[], mprod: Func2<T,T,T>): T {
-        var v = xs[0];
-        for(var i = 1; i < xs.length; i++){
-            v = mprod(v, xs[i]);
+    export function foldl<T>(mprod: Func2<T,T,T>, x: T, xs: T[]): T {
+        for(var i = 0; i < xs.length; i++){
+            x = mprod(x, xs[i]);
         }
-        return v;
+        return x;
+    }
+
+    export function foldl1<T>(mprod: Func2<T,T,T>, xs: T[]): T {
+        var x = xs[0];
+        for(var i = 1; i < xs.length; i++){
+            x = mprod(x, xs[i]);
+        }
+        return x;
+    }
+
+    export function foldr<T>(mprod: Func2<T,T,T>, x: T, xs: T[]): T {
+        for(var i = xs.length - 1; i >= 0; i--){
+            x = mprod(xs[i], x);
+        }
+        return x;
+    }
+
+    export function foldr1<T>(mprod: Func2<T,T,T>, xs: T[]): T {
+        var x = xs[xs.length - 1];
+        for(var i = xs.length - 2; i >= 0; i--){
+            x = mprod(xs[i], x);
+        }
+        return x;
     }
 
     export function and(xs: boolean[]): bool {
@@ -198,6 +223,18 @@ module Prelude {
             x = Math.min(x, xs[i]);
         }
         return x;
+    }
+
+    export function head<T>(xs: T[]): T {
+        return xs[0];
+    }
+
+    export function tail<T>(xs: T[]): T[] {
+        return xs.slice(1);
+    }
+
+    export function last<T>(xs: T[]): T {
+        return xs[xs.length - 1];
     }
 
     export function take<T>(n: number, xs: T[]): T[] {
@@ -322,7 +359,7 @@ module Prelude {
         return new Tuple2<X[],Y[]>(xs, ys);
     }
 
-    export function unzip2<X,Y,Z>(ts: Tuple3<X,Y,Z>[]): Tuple3<X[],Y[],Z[]> {
+    export function unzip3<X,Y,Z>(ts: Tuple3<X,Y,Z>[]): Tuple3<X[],Y[],Z[]> {
         var xs: X[] = [];
         var ys: Y[] = [];
         var zs: Z[] = [];
@@ -346,7 +383,7 @@ module Prelude {
     }
 
     export function words(x: string): string[] {
-        return x.split(/\w/);
+        return x.split(/\w+/);
     }
 
     export function unlines(xs: string[]): string {
@@ -356,7 +393,6 @@ module Prelude {
     export function unwords(xs: string[]): string {
         return xs.join(' ');
     }
-
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Show ///////////////////////////////////////////////////////////////////////////////////
@@ -380,18 +416,21 @@ module Prelude {
         buffer.push(x);
     }
 
-    export function putStrLn(x: string): void {
-        buffer.push(x);
+    export function putStrLn(x?: string): void {
+        if(x){
+            buffer.push(x);
+        }
         console.log(buffer.join(''));
         buffer = [];
     }
 
-    export function print<T extends Show>(x: T): void {
-        buffer.push(x.show());
+    export function print<T extends Show>(x?: T): void {
+        if(x){
+            buffer.push(x.show());
+        }
         console.log(buffer.join(''));
         buffer = [];
     }
-
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // number /////////////////////////////////////////////////////////////////////////////////
@@ -417,7 +456,7 @@ module Prelude {
     }
 
     export function lcm(x: number, y: number): number {
-        return x * y / gcd(x, y);
+        return Math.floor(x) * Math.floor(y) / gcd(x, y);
     }
 }
 
