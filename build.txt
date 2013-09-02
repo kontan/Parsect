@@ -1,5 +1,4 @@
 --target ES5
-src/prelude.ts
 src/parsect.ts
 src/globals.ts
 test/test.ts
