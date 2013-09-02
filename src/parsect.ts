@@ -6,7 +6,7 @@
 module Parsect{
 
     /////////////////////////////////////////////////////////////////////////////////////////
-    // Data
+    // Data Type Definitions //////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////
     
     export class Source { 
@@ -34,6 +34,22 @@ module Parsect{
         }
     }
 
+    export function success<T>(source:Source, delta: number, value:T): State<T>;
+    export function success<T>(source:string, delta: number, value:T): State<T>;
+    export function success<T>(source:any,    delta: number, value:T): State<T> {
+        source = typeof source === "string" ? new Source(source, 0) : source;
+        return new State(new Source(source.source, source.position + delta), true, value, undefined);
+    }
+
+    export function failure<T>(source:Source,                  errorMesssage:string): State<T> ;
+    export function failure<T>(source:string, position:number, errorMesssage:string): State<T> ;
+    export function failure<T>(arg0:any,      arg1:any,        arg2?:any           ): State<T> {
+        var source  = arg0 instanceof Source ? arg0 : new Source(arg0, arg1);
+        var message = arg0 instanceof Source ? arg1 : arg2;
+        return new State<any>(source, false, undefined, message);
+    }
+
+
     /// parser object
     export class Parser<T>{
         /// create new parser.
@@ -42,6 +58,33 @@ module Parsect{
         constructor(public parse: (source: Source)=>State<T>){
         }
     }
+
+    /// Parse an input.
+    /// This function acceps string primitive value as string parser or RegExp object as regexp parser.
+    /// @param parser parser.
+    /// @param input input.
+    /// @return the result of parssing.
+    export function parse<T,U>(parser: Parser<T>, input: string, userState?: U): State<T>;
+    export function parse<T,U>(parser: Parser<T>, input: Source, userState?: U): State<T>;
+    export function parse<  U>(parser: string,    input: string, userState?: U): State<string>;
+    export function parse<  U>(parser: string,    input: Source, userState?: U): State<string>;
+    export function parse<  U>(parser: String,    input: string, userState?: U): State<String>;
+    export function parse<  U>(parser: String,    input: Source, userState?: U): State<String>;    
+    export function parse<  U>(parser: RegExp,    input: string, userState?: U): State<string>;
+    export function parse<  U>(parser: RegExp,    input: Source, userState?: U): State<string>;    
+    export function parse<  U>(parser: any,       input: any   , userState?: U): State<any> {
+             if(parser instanceof Parser  ) ;
+        else if(parser instanceof String  ) parser = string(parser);
+        else if(parser instanceof RegExp  ) parser = regexp(parser);
+        else if(typeof parser === "string") parser = string(parser);
+        else throw new Error();
+             if(input instanceof Source  ) ;
+        else if(typeof input === "string") input = new Source(input);
+        else if(input instanceof String  ) input = new Source(input);
+        else throw new Error();
+        return parser.parse(input);
+    }
+
 
     /// seq function context object.
     export interface Context<S,U>{
@@ -68,64 +111,21 @@ module Parsect{
         ///ただし、seq コールバックが undefined 以外の値を返す場合は、out メンバ変数は無視され、その返り値が意味値となる。 
         out: S;
     }
-
-    function _normalize<T>(parser: Parser<T>): Parser<T     >;
-    function _normalize<T>(parser: string   ): Parser<string>;
-    function _normalize<T>(parser: RegExp   ): Parser<RegExp>;
-    function _normalize<T>(parser: any      ): Parser<any   > {
-        if(parser instanceof Parser  ) return parser;
-        if(parser instanceof String  ) return string(parser);
-        if(parser instanceof RegExp  ) return regexp(parser);
-        if(typeof parser === "string") return string(parser);
-        throw new Error();
-    }
-
             
-    /// Parse an input.
-    /// This function acceps string primitive value as string parser or RegExp object as regexp parser.
-    /// @param parser parser.
-    /// @param input input.
-    /// @return the result of parssing.
-    export function parse<T,U>(parser: Parser<T>, input: string, userState?: U): State<T>;
-    export function parse<T,U>(parser: Parser<T>, input: Source, userState?: U): State<T>;
-    export function parse<  U>(parser: string,    input: string, userState?: U): State<string>;
-    export function parse<  U>(parser: string,    input: Source, userState?: U): State<string>;
-    export function parse<  U>(parser: String,    input: string, userState?: U): State<String>;
-    export function parse<  U>(parser: String,    input: Source, userState?: U): State<String>;    
-    export function parse<  U>(parser: RegExp,    input: string, userState?: U): State<string>;
-    export function parse<  U>(parser: RegExp,    input: Source, userState?: U): State<string>;    
-    export function parse<  U>(parser: any,       input: any   , userState?: U): State<any> {
-        var parser = _normalize(parser);
-        var i = input instanceof Source ? input : new Source(input);
-        if( ! parser) throw new Error();
-        return parser.parse(i);
-    }
 
-    export function newSuccessState<T>(source:Source, delta: number, value:T): State<T>;
-    export function newSuccessState<T>(source:string, delta: number, value:T): State<T>;
-    export function newSuccessState<T>(source:any,    delta: number, value:T): State<T> {
-        source = typeof source === "string" ? new Source(source, 0) : source;
-        return new State(new Source(source.source, source.position + delta), true, value, undefined);
-    }
 
-    export function newFailureState<T>(source:Source,                  errorMesssage:string): State<T> ;
-    export function newFailureState<T>(source:string, position:number, errorMesssage:string): State<T> ;
-    export function newFailureState<T>(arg0:any,      arg1:any,        arg2?:any           ): State<T> {
-        var source  = arg0 instanceof Source ? arg0 : new Source(arg0, arg1);
-        var message = arg0 instanceof Source ? arg1 : arg2;
-        return new State<any>(source, false, undefined, message);
-    }
+
 
 
 
     ///////////////////////////////////////////////////////////////////////////////////
-    // Parser constructors
+    // Parser constructors ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////
 
     /// string parser
     export function string(text: string): Parser<string> {
         function stringParser(s: Source): State<string> {
-            return s.source.indexOf(text, s.position) === s.position ? newSuccessState(s, text.length, text) : newFailureState(s, "expected \"" + text + "\"");
+            return s.source.indexOf(text, s.position) === s.position ? success(s, text.length, text) : failure(s, "expected \"" + text + "\"");
         }
         return new Parser<string>(stringParser);
     }
@@ -140,9 +140,9 @@ module Parsect{
             //  "input.indexOf(matches[0]) == 0" is needed.
             if(ms && ms.index == 0 && ms.length > 0){
                 var m = ms[0];
-                return input.indexOf(ms[0]) == 0 ? newSuccessState(s, m.length, m) : newFailureState(s, "expected /" + pattern + "/");
+                return input.indexOf(ms[0]) == 0 ? success(s, m.length, m) : failure(s, "expected /" + pattern + "/");
             }else{
-                return newFailureState(s, "expected " + pattern);
+                return failure(s, "expected " + pattern);
             }
         }
         return new Parser<string>(regexpParser);
@@ -162,7 +162,7 @@ module Parsect{
         }
         function satisfyParser(s: Source){
             var c = s.source[s.position];
-            return cond(c) ? newSuccessState(s, 1, c) : newFailureState(s, "expected one char of \"" + expectedChars().join('') + "\"");
+            return cond(c) ? success(s, 1, c) : failure(s, "expected one char of \"" + expectedChars().join('') + "\"");
         }
         return new Parser<string>(satisfyParser);
     }
@@ -179,7 +179,7 @@ module Parsect{
     /// 
     export function seq<T,U>(f: (s: Context<T,U>, o: T)=>void): Parser<T>{
         function seqParser(source: Source): State<T> {
-            var st:State<T> = newSuccessState(source, 0, undefined);
+            var st:State<T> = success(source, 0, undefined);
             var s:Context<T,U> = <Context<T,U>> ((a:any)=>{
                 if(st.success){
                     st = parse(a, st.source);
@@ -191,7 +191,7 @@ module Parsect{
             s.notFollowedBy = (p:Parser<T>)=>{
                 var _st = parse(p, st.source);
                 if(_st.success){
-                    st = newFailureState(st.source, 'unexpected charactor');
+                    st = failure(st.source, 'unexpected charactor');
                 }
             };
             s.success = ()=> st.success;
@@ -199,10 +199,10 @@ module Parsect{
             s.result  = ()=> st.value;
             s.out = <T> {};
             var r: any = f(s, s.out);
-            if(r === undefined){
+            if(typeof r === "undefined"){
                 r = <any> s.out;
             }
-            return s.success() ? (r !== undefined ? newSuccessState(st.source, 0, r) : st) : st;
+            return s.success() ? (r !== undefined ? success(st.source, 0, r) : st) : st;
         }
         return new Parser<T>(seqParser);
     }
@@ -210,7 +210,7 @@ module Parsect{
     export function trying<T>(p: Parser<T>): Parser<T> {
         function tryingParser(source: Source): State<T> {
             var st = parse(p, source);
-            return st.success ? st : newFailureState(source, st.errorMesssage);
+            return st.success ? st : failure(source, st.errorMesssage);
         }
         return new Parser<T>(tryingParser);
     }
@@ -232,10 +232,10 @@ module Parsect{
                 if(_st.success){ 
                     st = _st;
                 }else{
-                    return newFailureState(st.source, _st.errorMesssage);
+                    return failure(st.source, _st.errorMesssage);
                 }
             }
-            return st.success ? st : newFailureState(st.source, "");
+            return st.success ? st : failure(st.source, "");
         }
         return new Parser(seriesParser);
     }
@@ -252,26 +252,26 @@ module Parsect{
                 if(_st.success){ 
                     st = _st;
                 }else{
-                    return newFailureState(st.source, _st.errorMesssage);
+                    return failure(st.source, _st.errorMesssage);
                 }
             }
-            return st.success ? st : newFailureState(st.source, "");
+            return st.success ? st : failure(st.source, "");
         }
         return new Parser(headParser);
     }
 
     export function take1<A,B>(a:Parser<A>, b:Parser<B>, ...ps:Parser<any>[]):Parser<B>{
         function take2Parser(source:Source){
-            var st:State<B> = newSuccessState(source, 0, undefined);
+            var st:State<B> = success(source, 0, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
                 if(_st.success){ 
                     st = _st;
                 }else{
-                    return newFailureState(st.source, _st.errorMesssage);
+                    return failure(st.source, _st.errorMesssage);
                 }
             }
-            return st.success ? st : newFailureState(st.source, "");
+            return st.success ? st : failure(st.source, "");
         }
         return new Parser<B>(take2Parser);
     }    
@@ -279,16 +279,16 @@ module Parsect{
     /// stream parser receives an array of Parser and consumes those parser input sequentially.
     export function stream<T>(ps: Parser<T>[]): Parser<T> {
         function streamparser(source:Source){
-            var st:State<T> = newSuccessState(source, 0, undefined);
+            var st:State<T> = success(source, 0, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
                 if(_st.success){ 
                     st = _st;
                 }else{
-                    return newFailureState(st.source, _st.errorMesssage);
+                    return failure(st.source, _st.errorMesssage);
                 }
             }
-            return st.success ? st : newFailureState(st.source, "");
+            return st.success ? st : failure(st.source, "");
         }
         return new Parser<T>(streamparser);
     }
@@ -298,18 +298,18 @@ module Parsect{
     // pure consumes no input. 
     export function pure<T>(f: ()=>T): Parser<T>{
         function pureParser(s: Source){
-            return newSuccessState(s, 0, f());
+            return success(s, 0, f());
         }
         return new Parser<T>(pureParser);
     }
 
     // count:(n:number, p:Parser<T>):Parser<T[]>
     export function count<T>(n: number, p: Parser<T>): Parser<T[]>;
-    export function count(n: number, p: String): Parser<string[]>;
-    export function count(n: number, p: RegExp): Parser<string[]>;
-    export function count(n: number, p: any): any {
+    export function count   (n: number, p: String   ): Parser<string[]>;
+    export function count   (n: number, p: RegExp   ): Parser<string[]>;
+    export function count   (n: number, p: any      ): any {
         function countParser(s: Source){
-            var st = newSuccessState(s, 0, undefined);
+            var st = success(s, 0, undefined);
             var results:any[] = [];
             for(var i = 0; i < n; i++){
                 var _st = parse(p, st.source);
@@ -317,10 +317,10 @@ module Parsect{
                     st = _st;
                     results.push(st.value);
                 }else{
-                    return newFailureState(st.source, "");
+                    return failure(st.source, "");
                 }
             }
-            return newSuccessState(st.source, 0, results);
+            return success(st.source, 0, results);
         }
         return new Parser(countParser);
     }
@@ -338,7 +338,7 @@ module Parsect{
                     st = _st;
                     results.push(st.value);
                 }else if(_st.source.position == st.source.position){
-                    return newSuccessState(st.source, 0, results);
+                    return success(st.source, 0, results);
                 }else{
                     return _st;
                 }
@@ -353,7 +353,7 @@ module Parsect{
     export function many1   (p: RegExp   ): Parser<string>;
     export function many1   (p: any      ): Parser<any> {
         function many1parser(s: Source){
-            var st = newSuccessState(s, 0, undefined);
+            var st = success(s, 0, undefined);
             var results = [];
             var i = 0;
             for(var i = 0; true; i++){
@@ -365,7 +365,7 @@ module Parsect{
                     break;
                 }
             }
-            return results.length > 0 ? newSuccessState(st.source, 0, results) : newFailureState(st.source, "");
+            return results.length > 0 ? success(st.source, 0, results) : failure(st.source, "");
         }
         return new Parser(many1parser);
     }
@@ -390,7 +390,7 @@ module Parsect{
                     return st;
                 }
             }
-            return newFailureState(source, "");
+            return failure(source, "");
         }
         return new Parser(orParser);
     }
@@ -424,7 +424,7 @@ module Parsect{
     export function notFollowedBy<T>(value: T, p: Parser<T>): Parser<T> {
         function notFollowedByParser(source:Source){
             var st = parse(p, source);
-            return st.success ? newSuccessState(source, value) : newFailureState(st.source, '');            
+            return st.success ? success(source, value) : failure(st.source, '');            
         }
         return new Parser(notFollowedByParser);
     }
@@ -563,7 +563,7 @@ module Parsect{
         function wholeParser(source:Source){
             var pos = source.position;
             var _st = parse(p, source);
-            return _st.success ? newSuccessState(source, 0, source.source.slice(pos, _st.source.position)) : _st;
+            return _st.success ? success(source, 0, source.source.slice(pos, _st.source.position)) : _st;
         }
         return new Parser(wholeParser);
     }    
@@ -582,17 +582,17 @@ module Parsect{
     export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
         function applyParser(source: Source){
             var values = [];
-            var st:State = newSuccessState(source, 0, undefined);
+            var st:State = success(source, 0, undefined);
             for(var i = 0; i < ps.length; i++){
                 var _st:State = parse(ps[i], st.source);
                 if(_st.success){
                     st = _st;
                     values.push(_st.value);
                 }else{
-                    return newFailureState(st.source, "");
+                    return failure(st.source, "");
                 }
             }
-            return newSuccessState(st.source, 0, func.apply(undefined, values));
+            return success(st.source, 0, func.apply(undefined, values));
         }
         return new Parser(applyParser);
     }
@@ -622,8 +622,8 @@ module Parsect{
     }
 
     // Primitives
-    export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? newSuccessState(source, 1, undefined) : newFailureState(source, undefined));
-    export var empty:    Parser<void> = new Parser((source:Source)=>newSuccessState(source, 0, undefined));
+    export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? success(source, 1, undefined) : failure(source, undefined));
+    export var empty:    Parser<void> = new Parser((source:Source)=>success(source, 0, undefined));
 
     // Charactors
     export var spaces:   Parser<string> = regexp(/^\s*/);
