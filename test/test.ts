@@ -330,4 +330,3 @@ test("URI", ()=>{
     var expected = {"scheme":"http","host":["www","nicovideo","jp"],"path":["watch","1363247616"],"params":[{"name":"via","value":"thumb_watch"}]};
     ok(Parsect.jsonEq(result.value, expected));
 });
-

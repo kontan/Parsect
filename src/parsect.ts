@@ -226,7 +226,7 @@ module Parsect{
     export function series<A,B,C,D,E,F,G,H>(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>, h:Parser<H>):Parser<H>;
     export function series(...ps:Parser<any>[]): any {
         function seriesParser(source:Source){
-            var st:State = new State(source, true, undefined);
+            var st:State<any> = new State<any>(source, true, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
                 if(_st.success){ 
@@ -246,7 +246,7 @@ module Parsect{
     export function head   (a:RegExp,    ...ps:Parser<any>[]): Parser<string>;    
     export function head   (a:any,       ...ps:Parser<any>[]): Parser {
         function headParser(source: Source){
-            var st:State = new State(source, true, undefined);
+            var st:State<any> = new State<any>(source, true, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
                 if(_st.success){ 
@@ -424,7 +424,7 @@ module Parsect{
     export function notFollowedBy<T>(value: T, p: Parser<T>): Parser<T> {
         function notFollowedByParser(source:Source){
             var st = parse(p, source);
-            return st.success ? success(source, value) : failure(st.source, '');            
+            return st.success ? success(source, 0, value) : failure(st.source, '');            
         }
         return new Parser(notFollowedByParser);
     }
@@ -514,9 +514,9 @@ module Parsect{
     export function endBy   (p: RegExp,    sep: RegExp     ): Parser<string[]>;
     export function endBy   (p: any,       sep: any        ): Parser<any> {
         function endByFunction(source:Source){
-            return parse(or(endBy1(p, sep), empty), source);
+            return parse(or(<Parser<any>> endBy1(p, sep), empty), source);
         };
-        return new Parser(endByFunction);
+        return new Parser<any>(endByFunction);
     }
 
     export function between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>): Parser<T>;
@@ -582,9 +582,9 @@ module Parsect{
     export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
         function applyParser(source: Source){
             var values = [];
-            var st:State = success(source, 0, undefined);
+            var st:State<any> = success(source, 0, undefined);
             for(var i = 0; i < ps.length; i++){
-                var _st:State = parse(ps[i], st.source);
+                var _st:State<any> = parse(ps[i], st.source);
                 if(_st.success){
                     st = _st;
                     values.push(_st.value);
