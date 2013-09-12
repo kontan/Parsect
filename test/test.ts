@@ -2,6 +2,8 @@
 /// <reference path="../src/parsect.ts" />
 /// <reference path="../src/globals.ts" />
 
+import p = Parsect;
+
 function join(ss:string[]): string{
     return ss.join();
 }
@@ -147,8 +149,8 @@ test("trying test", ()=>{
         s(")");
         return e;
     }));
-    var parens_a = between('(', 'a', ')');
-    var parens_b = between('(', 'b', ')');
+    var parens_a = between(string('('), string('a'), string(')'));
+    var parens_b = between(string('('), string('b'), string(')'));
     //ok(parse(parser, "(hoge)").equals(new Parsect.State(new Parsect.Source("(hoge)", 6), true, "hoge")));
     ok(parse(or(parens_a, parens_b), "(b)").equals(new Parsect.State(new Source("(b)", 1), false, undefined, "expected \"a\"")));
     //ok(parse(or(trying(parens_a), parens_b), "(b)").equals(Parsect.success(new Source("(b)", 3), 0, "b")));
@@ -236,7 +238,7 @@ test("eof test 1", ()=>{
 });
 
 test("eof test 2", ()=>{
-    var parser = series(<any>string("a"), <any>eof); 
+    var parser = p.tail(<any>string("a"), <any>eof); 
     var source = "a";
     var expected = Parsect.success(source, 2, <any> undefined);
     ok(parse(parser, source).equals(expected));
@@ -320,10 +322,10 @@ test("URI", ()=>{
     	o.scheme = s(/[a-z]+/);
     	s('://');
     	o.host = s(sepBy1(/[a-z]+/, '.'));
-    	o.port = s(optional(series(<any>string(':'), <any>regexp(/\d+/))));
+    	o.port = s(optional(p.tail(<any>string(':'), <any>regexp(/\d+/))));
     	s('/');
     	o.path = s(sepBy(/[^\/?]+/, '/'));
-    	o.params = s(optional(series(<any>string("?"), <any>sepBy(param,"&"))));
+    	o.params = s(optional(p.tail(<any>string("?"), <any>sepBy(param,"&"))));
     });
     var source = 'http://www.nicovideo.jp/watch/1356674833?via=thumb_watch';
     var result = parse(parser, source);

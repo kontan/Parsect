@@ -2,3 +2,4 @@
 src/parsect.ts
 src/globals.ts
 test/test.ts
+test/mail.ts

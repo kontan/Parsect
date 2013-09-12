@@ -1,0 +1,7 @@
+Abc@example.com
+Abc.123@example.com
+user+mailbox/department=shipping@example.com
+!#$%&'*+-/=?^_`.{|}~@example.com
+"Abc@def"@example.com
+"Fred\ Bloggs"@example.com
+"Joe.\\Blow"@example.com

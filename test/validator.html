@@ -1,0 +1,28 @@
+
+
+<style>
+    input[type="text"]{
+        width: 32em;
+        font-size: xx-large;
+        font-family: monospace;
+    } 
+    p{
+        font-size: large;
+    }
+</style>
+<h1>Mail Addresss Format Validator</h1>
+<input type="text" id="validator" value="hoge@example.com"></input>
+<p id="result"></p>
+<script type="text/javascript" src="../src/parsect.js"></script>
+<script type="text/javascript" src="../src/globals.js"></script>
+<script src="mail.js"></script>
+<script>
+    var validator = document.getElementById("validator");
+    function validate(){
+        var v = mail.validate(validator.value);
+        document.getElementById("result").textContent = v ? "たぶん Valid だと思う！" : "インバリッドだという気がする";
+    }
+    validator.addEventListener("keyup", validate);
+    validate();
+</script>
+

@@ -149,12 +149,12 @@ module Parsect{
     }
 
     /// `satisfy cond` returns a parser consume a charactor that satisfy the condition `cond` 
-    export function satisfy(cond: (charactor: string)=>boolean): Parser<string> {
+    export function satisfy(cond: (charactor: string, code: number)=>boolean): Parser<string> {
         function expectedChars(){
             var cs = [];
             for(var i = 32; i <= 126; i++){
                 var c = String.fromCharCode(i);
-                if(cond(c)){
+                if(cond(c, i)){
                     cs.push(c);
                 }
             }
@@ -162,10 +162,19 @@ module Parsect{
         }
         function satisfyParser(s: Source){
             var c = s.source[s.position];
-            return cond(c) ? success(s, 1, c) : failure(s, "expected one char of \"" + expectedChars().join('') + "\"");
+            var i = s.source.charCodeAt(s.position);
+            return cond(c, i) ? success(s, 1, c) : failure(s, "expected one char of \"" + expectedChars().join('') + "\"");
         }
         return new Parser<string>(satisfyParser);
     }
+
+    export function range(min: number, max: number  ): Parser<string> {
+        return satisfy((_,i)=> min <= i && i <= max );
+    }
+
+    export function char(index:   number): Parser<string> {
+        return satisfy((_,i)=> i === index);
+    }    
 
     //////////////////////////////////////////////////////////////////////////////////////
     // Parser Combinators
@@ -215,17 +224,18 @@ module Parsect{
         return new Parser<T>(tryingParser);
     }
 
-    // series function takes parsers and apply its sequentially.
+    // tail function takes parsers and apply its sequentially.
     // This function returns the State object that last parser returned.
-    export function series<A              >(a:Parser<A>                                                                                           ):Parser<A>;
-    export function series<A,B            >(a:Parser<A>, b:Parser<B>                                                                              ):Parser<B>;
-    export function series<A,B,C          >(a:Parser<A>, b:Parser<B>, c:Parser<C>                                                                 ):Parser<C>;
-    export function series<A,B,C,D,E      >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>                                                    ):Parser<D>;    
-    export function series<A,B,C,D,E,F    >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>                                       ):Parser<E>;
-    export function series<A,B,C,D,E,F,G  >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>             ):Parser<G>;
-    export function series<A,B,C,D,E,F,G,H>(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>, h:Parser<H>):Parser<H>;
-    export function series(...ps:Parser<any>[]): any {
-        function seriesParser(source:Source){
+    export function tail<A              >(a:Parser<A>                                                                                           ):Parser<A>;
+    export function tail<A,B            >(a:Parser<A>, b:Parser<B>                                                                              ):Parser<B>;
+    export function tail<A,B,C          >(a:Parser<A>, b:Parser<B>, c:Parser<C>                                                                 ):Parser<C>;
+    export function tail<A,B,C,D,E      >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>                                                    ):Parser<D>;    
+    export function tail<A,B,C,D,E,F    >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>                                       ):Parser<E>;
+    export function tail<A,B,C,D,E,F,G  >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>             ):Parser<G>;
+    export function tail<A,B,C,D,E,F,G,H>(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>, h:Parser<H>):Parser<H>;
+    export function tail(...ps:Parser<any>[]): any {
+        if(ps.some(p=>!p)) throw new Error();
+        function tailParser(source:Source){
             var st:State<any> = new State<any>(source, true, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
                 var _st = parse(ps[i], st.source);
@@ -237,7 +247,7 @@ module Parsect{
             }
             return st.success ? st : failure(st.source, "");
         }
-        return new Parser(seriesParser);
+        return new Parser(tailParser);
     }
 
     /// head(a, b, c, ...) parses a, b, c and etc, and returns new parser of `a`.
@@ -325,10 +335,33 @@ module Parsect{
         return new Parser(countParser);
     }
 
-    export function many<T>(p:Parser<T>): Parser<T>;
-    export function many   (p:String   ): Parser<string>;
-    export function many   (p:RegExp   ): Parser<string>;
+    // repeat:(n:number, m: number, p:Parser<T>):Parser<T[]>
+    export function repeat<T>(n: number, m: number, p: Parser<T>): Parser<T[]>;
+    export function repeat   (n: number, m: number, p: String   ): Parser<string[]>;
+    export function repeat   (n: number, m: number, p: RegExp   ): Parser<string[]>;
+    export function repeat   (n: number, m: number, p: any      ): any {
+        function repeatParser(s: Source){
+            var results:any[] = [];
+            var st = success(s, 0, undefined);
+            for(var i = 0; i < m; i++){
+                var _st = parse(p, st.source);
+                if(_st.success){
+                    st = _st;
+                    results.push(st.value);
+                }else{
+                    break;
+                }
+            }
+            return results.length < n ? failure(st.source, 0) : success(st.source, 0, results);
+        }
+        return new Parser(repeatParser);
+    }
+
+    export function many<T>(p:Parser<T>): Parser<T[]>;
+    export function many   (p:String   ): Parser<string[]>;
+    export function many   (p:RegExp   ): Parser<string[]>;
     export function many   (p:any      ): Parser<any>{
+        if( ! p) throw new Error();
         function manyParser(s: Source){
             var st = new State(s, true, undefined);
             var results = [];
@@ -348,10 +381,10 @@ module Parsect{
     }
 
     // many1:(p:Parser<T>):Parser<T[]>
-    export function many1<T>(p: Parser<T>): Parser<T>;
-    export function many1   (p: String   ): Parser<string>;
-    export function many1   (p: RegExp   ): Parser<string>;
-    export function many1   (p: any      ): Parser<any> {
+    export function many1<T>(p: Parser<T>): Parser<T[]>;
+    export function many1   (p: String   ): Parser<string[]>;
+    export function many1   (p: RegExp   ): Parser<string[]>;
+    export function many1   (p: any      ): Parser<any[]> {
         function many1parser(s: Source){
             var st = success(s, 0, undefined);
             var results = [];
@@ -380,7 +413,7 @@ module Parsect{
     export function or   (p:String,         q:RegExp                          ): Parser<string>;
     export function or   (p:RegExp,         q:RegExp                          ): Parser<string>;            
     export function or   (...ps:any[]): Parser<any> {
-        var ps:Parser<any>[] = <any>arguments;
+        if( ! ps.every(p => !!p)) throw new Error();
         function orParser(source: Source){
             for(var i = 0; i < ps.length; i++){
                 var st = parse(ps[i], source);
@@ -421,6 +454,14 @@ module Parsect{
         return new Parser(optionalParser);
     }
 
+    export function lookAhead<T>(p: Parser<T>): Parser<T> {
+        function lookAhead(source:Source){
+            var st = parse(p, source);
+            return st.success ? success(source, 0, st.value) : failure(st.source, '');            
+        }
+        return new Parser(lookAhead);
+    }    
+
     export function notFollowedBy<T>(value: T, p: Parser<T>): Parser<T> {
         function notFollowedByParser(source:Source){
             var st = parse(p, source);
@@ -450,10 +491,11 @@ module Parsect{
     export function sepBy1   (p: RegExp,    sep: string     ): Parser<string[]>;
     export function sepBy1   (p: RegExp,    sep: RegExp     ): Parser<string[]>;
     export function sepBy1   (p: any,       sep: any        ): Parser<any[]> {
+        if( ! p || ! sep ) throw new Error();
         function sepBy1parser(source: Source){
             return parse(seq(s=>{
                 var x = s(p);
-                var xs = s(many(series(sep, p)));
+                var xs = s(many(tail(sep, p)));
                 if(s.success()){
                     xs.unshift(x);
                     return xs;
@@ -462,6 +504,45 @@ module Parsect{
         }
         return new Parser(sepBy1parser);
     }
+
+    export function sepByN<T>(min: number, max: number, p: Parser<T>, sep: Parser<any>): Parser<T[]> {
+        if(max < min) throw new Error();
+        if( ! p || ! sep ) throw new Error();
+        function sepByNParser(source: Source){
+            var xs = [];
+            var st = success(source, 0, undefined);
+
+            var _st = parse(p, st.source);
+            if(_st.success){
+                st = _st;
+                xs.push(_st.value);
+
+                for(var i = 1; i < max; i++){
+                    var _st = parse(sep, st.source);
+                    if(_st.success){
+                        var __st = parse(p, _st.source);
+                        if(__st.success){
+                            st = __st;
+                            xs.push(__st.value);
+                        }else{
+                            break;
+                        }
+                    }else{
+                        break;
+                    }
+                }
+            }
+
+            if(st.success){
+                return min <= xs.length ? success(st.source, 0, xs) : failure(st.source, 0, "sepByN: too few tokens.");
+            }else{
+                return st;
+            }
+                
+        }
+        return new Parser(sepByNParser);
+    }
+
 
     export function sepBy<T>(p:Parser<T>, sep:Parser<any>): Parser<T[]>;    
     export function sepBy<T>(p:Parser<T>, sep:string     ): Parser<T[]>;
@@ -473,6 +554,7 @@ module Parsect{
     export function sepBy   (p:RegExp,    sep:string     ): Parser<string[]>;
     export function sepBy   (p:RegExp,    sep:RegExp     ): Parser<string[]>;
     export function sepBy   (p:any,       sep:any        ): Parser<any[]>{
+        if( ! p || ! sep) throw new Error();
         function sepByParser(source:Source){
             return parse(or(sepBy1(p, sep), map(()=>[], empty)), source);
         }
@@ -547,9 +629,9 @@ module Parsect{
     export function between   (open:RegExp,      p:RegExp,    close:String     ): Parser<string>;
     export function between   (open:RegExp,      p:RegExp,    close:RegExp     ): Parser<string>;
     export function between   (open:any,         p:any,       close:any        ): Parser<any> {
+        if( ! (open && p && close) ) throw "Parsect.between: Invalid argument:";
         function betweenParser(source: Source){
             return parse(seq(s=>{
-                if( ! (open && p && close) ) throw "Parsect.between: Invalid argument:";
                 s(open);
                 var v = s(p);
                 s(close);
@@ -661,5 +743,11 @@ module Parsect{
         }
         return f;
     }
+
+    export var manyj:   (p: Parser<string>                                         ) => Parser<string> = p            => map(x=>x.join(''), many(p));
+    export var many1j:  (p: Parser<string>                                         ) => Parser<string> = p            => map(x=>x.join(''), many1(p));
+    export var sepBy1j: (p: Parser<string>, q: Parser<string>                      ) => Parser<string> = (p, q      ) => map(x=>x.join(''), sepBy1(p, q));
+    export var sepByNj: (m: number, n: number, p: Parser<string>, q: Parser<string>) => Parser<string> = (m, n, p, q) => map(x=>x.join(''), sepByN(m, n, p, q));
+    export var repeatj: (m: number, n: number, p: Parser<string>                   ) => Parser<string> = (m, n, p   ) => map(x=>x.join(''), repeat(m, n, p));
 }
 
