@@ -230,6 +230,14 @@ module Tests {
         ok(p.parse(parser, source).equals(expected));
     });
 
+    test("between test 3", ()=>{
+        var parser = p.between('[', 'a', ']'); 
+        var source = "[a]";
+        var expected = Parsect.success(source, 3, "a");
+        ok(p.parse(parser, source).equals(expected));
+    });
+
+
     test("eof test 1", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
         var source = "";
@@ -299,6 +307,14 @@ module Tests {
         var expected = Parsect.success(source, 5, 'aaaaa');
         ok(p.parse(parser, source).equals(expected));
     });
+
+    test("lazy test 1", ()=>{
+        var parser = p.or(/[a-z]/, p.between("[", ()=> parser, "]"));
+        var source = "[[[[x]]]]";
+        var expected = Parsect.success(source, 3, 'x');
+        ok(p.parse(parser, source).equals(expected));
+    });
+
 
     interface URIParams{
         name: string;
