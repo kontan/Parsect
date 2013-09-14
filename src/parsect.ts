@@ -32,6 +32,7 @@
 // THE SOFTWARE.
 //
 
+
 'use strict';
 
 // *HACK* ... function overload combination hack

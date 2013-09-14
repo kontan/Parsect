@@ -170,3 +170,5 @@ pip-log.txt
 
 *.js
 *.js.map
+
+!src/parsect.js
