@@ -1,5 +1,36 @@
-// Parsect (https://github.com/kontan/Parsect)
-// @author Kon - http://phyzkit.net/
+//
+//                            Parsect 
+//
+//              Parser Combinator for JavaScript/TypeScript  
+//
+//
+//             site: https://github.com/kontan/Parsect
+//                author: Kon (http://phyzkit.net/)
+//  
+//
+//            
+//                         The MIT License
+// 
+//                      Copyright (c) 2013 Kon
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
 
 'use strict';
 
@@ -275,16 +306,17 @@ module Parsect{
         return new Parser(tailParser);
     }
 
-    /// stream parser receives an array of Parser and consumes those parser input sequentially.
-    export function stream<T>(ps: Parser<T>[]): Parser<T> {
-        function streamparser(source:Source){
+    /// series parser receives an array of Parser and consumes those parser input sequentially.
+    export function series<T>(ps: Parser<T>[]): Parser<T> {
+        ps = ps.map(asParser);
+        function seriesParser(source:Source){
             var st:State<T> = success(source, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
                 st = parse(ps[i], st.source);
             }
             return st;
         }
-        return new Parser<T>(streamparser);
+        return new Parser<T>(seriesParser);
     }
 
     // Repetitious parser constructors ////////////////////////////////////////////////////////////////////////////////////////
@@ -431,13 +463,13 @@ module Parsect{
         return map(()=>f(), empty);
     }
 
-    export function trying<T>(p: Parser<T>): Parser<T> {
+    export function triable<T>(p: Parser<T>): Parser<T> {
         assert(p instanceof Parser);
-        function tryingParser(source: Source): State<T> {
+        function triableParser(source: Source): State<T> {
             var st = parse(p, source);
             return st.success ? st : failure(source, st.expected);
         }
-        return new Parser<T>(tryingParser);
+        return new Parser<T>(triableParser);
     }
 
     export function lookAhead<T>(p: Parser<T>): Parser<T> {
@@ -491,7 +523,7 @@ module Parsect{
     export function apply<A,B,C,D,E,F,G,H,R>(m: (a: A, b: B, c: C, d: D, e: E, f: F, g: G, h:H)=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>, pg: Parser<G>, ph: Parser<H>): Parser<R>;    
     export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
         assert(func instanceof Function);
-        return map(xs=>func.apply(undefined, xs), stream(ps))
+        return map(xs=>func.apply(undefined, xs), series(ps))
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

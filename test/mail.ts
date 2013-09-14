@@ -370,7 +370,7 @@ module mail {
     // ( ALPHA / DIGIT / "-" ) は次の要素が ( ALPHA / DIGIT / "-" ) か Let-dig なら読み進めていいから、
     // lookAhead(Let_dig) する
     var Ldh_str: p.Parser<string> = p.tail(
-        j.many(p.trying(p.seq(s=>{
+        j.many(p.triable(p.seq(s=>{
             var c = s(p.or(ALPHA, DIGIT, p.string("-"))); 
             s(p.lookAhead(Let_dig));
             return c;
@@ -509,7 +509,7 @@ module mail {
         // という入力で、これはipv4のアドレスであるにも関わらず、先頭の12をipv4のアドレスとして読んでしまう。
         // 仕方ないので、さきにipv4として読めるかどうか試す
         s(p.or(
-            p.trying(IPv4_address_literal),
+            p.triable(IPv4_address_literal),
             p.seq(s=>{
                 s(p.sepByN(0, 4, IPv6_hex, p.string(":")));
                 s(IPv4_address_literal);
@@ -519,9 +519,9 @@ module mail {
 
     // IPv6-addr      = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
     var IPv6_addr: p.Parser<string> = p.or(
-        p.trying(IPv6v4_comp),    // 順番変えた
-        p.trying(IPv6_full),  
-        p.trying(IPv6_comp),
+        p.triable(IPv6v4_comp),    // 順番変えた
+        p.triable(IPv6_full),  
+        p.triable(IPv6_comp),
         IPv6v4_full
     );
 

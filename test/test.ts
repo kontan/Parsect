@@ -123,8 +123,8 @@ module Tests {
         ok(result.equals(expected));
     });
 
-    test("trying 1", ()=>{
-        var parser = p.trying(p.seq((s)=>{
+    test("triable 1", ()=>{
+        var parser = p.triable(p.seq((s)=>{
             s("(");
             var e = s("hoge");
             s(")");
