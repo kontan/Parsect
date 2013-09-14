@@ -32,7 +32,9 @@ module Parsect{
             // _position == _source.length + 1 at the maximum because of eof.
             if(position < 0 || position > source.length + 1) throw "_position: out of range: " + position;
         }
-
+        step(count: number): Source {
+            return new Source(this.source, this.position + count);
+        }
         equals(src: Source): boolean {
             return src && this.source === src.source && this.position === src.position;
         }
@@ -48,16 +50,17 @@ module Parsect{
             return st &&
                    this.source.equals(st.source)     && 
                    this.success       === st.success &&
-                   this.success ? jsonEq(this.value, st.value) : this.errorMesssage === st.errorMesssage;
+                   (this.success ? jsonEq(this.value, st.value) : this.errorMesssage === st.errorMesssage);
         }
     }
 
     // create new successful state.
-    export function success<T>(source:Source, delta: number, value:T): State<T>;
-    export function success<T>(source:string, delta: number, value:T): State<T>;
-    export function success<T>(source:any,    delta: number, value:T): State<T> {
+
+    export function success<T>(source:Source, value:T): State<T>;
+    export function success<T>(source:string, value:T): State<T>;        
+    export function success<T>(source:any,    value:T): State<T> {
         source = typeof source === "string" ? new Source(source, 0) : source;
-        return new State(new Source(source.source, source.position + delta), true, value, undefined);
+        return new State(source, true, value, undefined);
     }
 
     // create new failure state
@@ -118,6 +121,9 @@ module Parsect{
            (s: string   ): string;
            (p: RegExp   ): string;
 
+        // pure(f) と同じ
+        <T>(f: ()=>T    ): T;
+
         userState: U;        /// 現在のコンテキストのユーザ状態。自由に書き込み、読み込みが可能です。
         peek: string;       // Current input string
         success: boolean;
@@ -136,7 +142,7 @@ module Parsect{
     export function string(text: string): Parser<string> {
         assert(typeof text === "string" || <String>text instanceof String)
         function stringParser(s: Source): State<string> {
-            return s.source.indexOf(text, s.position) === s.position ? success(s, text.length, text) : failure(s, "expected \"" + text + "\"");
+            return s.source.indexOf(text, s.position) === s.position ? success(s.step(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser<string>(stringParser);
     }
@@ -152,9 +158,9 @@ module Parsect{
             //  "input.indexOf(matches[0]) == 0" is needed.
             if(ms && ms.index == 0 && ms.length > 0){
                 var m = ms[0];
-                return input.indexOf(ms[0]) == 0 ? success(s, m.length, m) : failure(s, "expected /" + pattern + "/");
+                return input.indexOf(ms[0]) == 0 ? success(s.step(m.length), m) : failure(s, "/" + pattern + "/");
             }else{
-                return failure(s, "expected " + pattern);
+                return failure(s, "" + pattern);
             }
         }
         return new Parser<string>(regexpParser);
@@ -176,7 +182,12 @@ module Parsect{
         function satisfyParser(s: Source){
             var c = s.source[s.position];
             var i = s.source.charCodeAt(s.position);
-            return condition(c, i) ? success(s, 1, c) : failure(s, "expected one char of \"" + expectedChars().join('') + "\"");
+            if(condition(c, i)){
+                return success(s.step(1), c);
+            }else{
+                var cs = expectedChars();
+                return failure(s, (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"");
+            }
         }
         return new Parser<string>(satisfyParser);
     }
@@ -209,44 +220,35 @@ module Parsect{
     export function seq<T,U>(f: (s: Context<T,U>, o: T)=>void): Parser<T>{
         assert(f instanceof Function);
         function seqParser(source: Source): State<T> {
-            var st:State<T> = success(source, 0, undefined);
-            var s:Context<T,U> = <Context<T,U>> ((a:any)=>{
+            var st:State<T> = success(source, undefined);
+            var context:Context<T,U> = <Context<T,U>> ((a: any)=>{
                 if(st.success){
+                    if(a instanceof Function) a = pure(a);
                     st = parse(a, st.source);
-                    s.success = st.success;
-                    s.value  = st.value;
-                    if(st.success){ 
-                        return st.value; 
-                    }
+                    return st.value; 
                 }
             });
-            s.success = true;
-            Object.defineProperty(s, "peek", { get: ()=> st.source.source.slice(st.source.position, st.source.position + 128) });
-            s.value  = undefined;
-            s.out = <T> {};
-            var r: any = f(s, s.out);
-            if(typeof r === "undefined"){
-                r = <any> s.out;
-            }
-            return s.success ? (r !== undefined ? success(st.source, 0, r) : st) : st;
+            Object.defineProperty(context, "success", { get: ()=> st.success });
+            Object.defineProperty(context, "peek",    { get: ()=> st.source.source.slice(st.source.position, st.source.position + 128) });
+            Object.defineProperty(context, "value",   { get: ()=> st.value });
+            context.out = <T> {};
+            var returnValue: any = f(context, context.out);
+            var value = typeof returnValue === "undefined" ? context.out : returnValue;
+            return context.success ? (value !== undefined ? success(st.source, value) : st) : st;
         }
         return new Parser<T>(seqParser);
     }
 
-    /// head(a, b, c, ...) parses a, b, c and etc, and returns new parser of `a`.
-    export function head<A>(a:Parser<A>, ...ps:Parser<any>[]): Parser<A> {
-        a = asParser(a); ps = ps.map(asParser);
+    /// head(a, b, c, ...) parses a, b, c and etc, and returns value of a.
+    export function head<T>(p:Parser<T>, ...ps:Parser<any>[]): Parser<T> {
+        p = asParser(p); ps = ps.map(asParser);
         function headParser(source: Source){
-            var st:State<any> = new State<any>(source, true, undefined);
+            var st:State<any> = parse(p, source);
+            var value: T = st.value;
             for(var i = 0; i < ps.length && st.success; i++){
-                var _st = parse(ps[i], st.source);
-                if(_st.success){ 
-                    st = _st;
-                }else{
-                    return failure(st.source, _st.errorMesssage);
-                }
+                st = parse(ps[i], st.source);
             }
-            return st.success ? st : failure(st.source, "");
+            return st.success ? success(st.source, value) : st;
         }
         return new Parser(headParser);
     }
@@ -265,16 +267,11 @@ module Parsect{
     export function tail(...ps:Parser<any>[]): any {
         ps = ps.map(asParser);
         function tailParser(source:Source){
-            var st:State<any> = new State<any>(source, true, undefined);
+            var st:State<any> = success(source, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
-                var _st = parse(ps[i], st.source);
-                if(_st.success){ 
-                    st = _st;
-                }else{
-                    return failure(st.source, _st.errorMesssage);
-                }
+                st = parse(ps[i], st.source);
             }
-            return st.success ? st : failure(st.source, "");
+            return st;
         }
         return new Parser(tailParser);
     }
@@ -282,16 +279,11 @@ module Parsect{
     /// stream parser receives an array of Parser and consumes those parser input sequentially.
     export function stream<T>(ps: Parser<T>[]): Parser<T> {
         function streamparser(source:Source){
-            var st:State<T> = success(source, 0, undefined);
+            var st:State<T> = success(source, undefined);
             for(var i = 0; i < ps.length && st.success; i++){
-                var _st = parse(ps[i], st.source);
-                if(_st.success){ 
-                    st = _st;
-                }else{
-                    return failure(st.source, _st.errorMesssage);
-                }
+                st = parse(ps[i], st.source);
             }
-            return st.success ? st : failure(st.source, "");
+            return st;
         }
         return new Parser<T>(streamparser);
     }
@@ -302,18 +294,21 @@ module Parsect{
     export function repeat<T>(min: number, max: number, p: Parser<T>): Parser<T[]> {
         p = asParser(p);
         function repeatParser(s: Source){
-            var results:any[] = [];
-            var st = success(s, 0, undefined);
+            // For debugging　and efficiency, expand list as loop intentionally.
+            var xs:any[] = [];
+            var st = success(s, undefined);
             for(var i = 0; i < max; i++){
                 var _st = parse(p, st.source);
                 if(_st.success){
                     st = _st;
-                    results.push(st.value);
+                    xs.push(st.value);
+                }else if(i < min){
+                    return _st;
                 }else{
                     break;
                 }
             }
-            return results.length < min || _st.source.position > st.source.position ? _st : success(st.source, 0, results);
+            return success(st.source, xs);
         }
         return new Parser(repeatParser);
     }
@@ -338,8 +333,9 @@ module Parsect{
         p = asParser(p); sep = asParser(sep);
         assert(min <= max);
         function sepByNParser(source: Source){
+            // For debugging　and efficiency, expand list as loop intentionally.
             var xs = [];
-            var st = success(source, 0, undefined);
+            var st = success(source, undefined);
 
             var _st = parse(p, st.source);
             if(_st.success){
@@ -354,13 +350,17 @@ module Parsect{
                             xs.push(st.value);
                             continue;
                         }
+                    }else if(xs.length < min){
+                        return _st;
                     }
                     break;
                 }
+            }else if(xs.length < min){
+                return _st;
             }
 
             if(st.success){
-                return min <= xs.length ? success(st.source, 0, xs) : failure(st.source, "sepByN: too few tokens.");
+                return success(st.source, xs);
             }else{
                 return st;
             }
@@ -377,41 +377,20 @@ module Parsect{
         return sepByN(0, Number.MAX_VALUE, p, sep);
     }
 
+    export function endByN<T>(min: number, max: number, p: Parser<T>, sep: Parser<any>): Parser<T[]> {
+        return repeat(min, max, head(p, sep));
+    }
+
     export function endBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]> {
-        p = asParser(p); sep = asParser(sep);
-        function endBy1Parser(source:Source){
-            var q = seq((s)=>{ var x = s(p); s(sep); return x; });
-            return parse(seq((s)=>{
-                var x = s(q);
-                var xs = s(many(q));
-                if(s.success){
-                    xs.unshift(x);
-                    return xs;
-                } 
-            }), source); 
-        }
-        return new Parser(endBy1Parser);
+        return endByN(1, Number.MAX_VALUE, p, sep);
     }
 
     export function endBy<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]> {
-        p = asParser(p); sep = asParser(sep);
-        function endByFunction(source:Source){
-            return parse(or(<any>endBy1(p, sep), empty), source);
-        };
-        return new Parser<any>(endByFunction);
+        return endByN(0, Number.MAX_VALUE, p, sep);
     }
 
     export function between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>): Parser<T> {
-        open = asParser(open); p = asParser(p); close = asParser(close);
-        function betweenParser(source: Source){
-            return parse(seq(s=>{
-                s(open);
-                var v = s(p);
-                s(close);
-                return v;
-            }), source);
-        }
-        return new Parser(betweenParser);    
+        return tail(open, head(p, close));
     }
 
     // Selective parser constructors //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -419,13 +398,16 @@ module Parsect{
     export function or<T>(...ps: Parser<T>[]): Parser<T> {
         ps = ps.map(asParser);
         function orParser(source: Source){
+            // For debugging　and efficiency, expand list as loop intentionally.
+            var sts = [];
             for(var i = 0; i < ps.length; i++){
                 var st = parse(ps[i], source);
                 if(st.success || st.source.position != source.position){
                     return st;
                 }
+                sts.push(st);
             }
-            return failure(source, "");
+            return failure(source, "one of " + sts.map(st=>st.errorMesssage).join(','));
         }
         return new Parser(orParser);
     }
@@ -433,12 +415,7 @@ module Parsect{
     // Optional parser constructors ///////////////////////////////////////////////////////////////////////////////////////////
 
     export function option<T>(defaultValue: T, p: Parser<T>): Parser<T> {
-        p = asParser(p);
-        function optionParser(source: Source){
-            var st = parse(p, source);
-            return st.success ? st : new State(source, true, defaultValue);
-        }
-        return new Parser(optionParser);
+        return or(p, pure(()=>defaultValue));
     }
 
     // optional:(p:Parser<T>):Parser<T>
@@ -446,18 +423,13 @@ module Parsect{
         return option(undefined, p);
     }
 
-
     // Special parser constructors /////////////////////////////////////////////////////////////////////////////////////////////
 
     // pure:(f:()=>T):Parser<T>
     // pure function injects a arbitrary value. 
     // pure consumes no input. 
     export function pure<T>(f: ()=>T): Parser<T>{
-        assert(f instanceof Function);
-        function pureParser(s: Source){
-            return success(s, 0, f());
-        }
-        return new Parser<T>(pureParser);
+        return map(()=>f(), empty);
     }
 
     export function trying<T>(p: Parser<T>): Parser<T> {
@@ -473,7 +445,7 @@ module Parsect{
         assert(p instanceof Parser);
         function lookAhead(source:Source){
             var st = parse(p, source);
-            return st.success ? success(source, 0, st.value) : failure(st.source, '');            
+            return st.success ? success(source, st.value) : st;            
         }
         return new Parser(lookAhead);
     }    
@@ -482,7 +454,7 @@ module Parsect{
         assert(p instanceof Parser);
         function notFollowedByParser(source:Source){
             var st = parse(p, source);
-            return st.success ? success(source, 0, value) : failure(st.source, '');            
+            return st.success ? success(source, value) : failure(st.source, '');
         }
         return new Parser(notFollowedByParser);
     }
@@ -494,7 +466,7 @@ module Parsect{
         p = asParser(p);
         function mapParser(source: Source){
             var st = parse(p, source);
-            return st.success ? new State(st.source, true, f(st.value)) : st;
+            return st.success ? success(st.source, f(st.value)) : st;
         }
         return new Parser(mapParser);
     }
@@ -520,22 +492,7 @@ module Parsect{
     export function apply<A,B,C,D,E,F,G,H,R>(m: (a: A, b: B, c: C, d: D, e: E, f: F, g: G, h:H)=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>, pg: Parser<G>, ph: Parser<H>): Parser<R>;    
     export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
         assert(func instanceof Function);
-        ps = ps.map(asParser);
-        function applyParser(source: Source){
-            var values = [];
-            var st:State<any> = success(source, 0, undefined);
-            for(var i = 0; i < ps.length; i++){
-                var _st:State<any> = parse(ps[i], st.source);
-                if(_st.success){
-                    st = _st;
-                    values.push(_st.value);
-                }else{
-                    return failure(st.source, "");
-                }
-            }
-            return success(st.source, 0, func.apply(undefined, values));
-        }
-        return new Parser(applyParser);
+        return map(xs=>func.apply(undefined, xs), stream(ps))
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -545,20 +502,20 @@ module Parsect{
     export function log(f: (state: number)=>void): Parser<void>{
         assert(f instanceof Function);
         var count = 0;
-        function logParser(source){
-            var pos = Math.floor(100 * source.position / source.source.length);
+        function logParser(source: Source){
+            var pos = Math.floor(source.position / source.source.length);
             if(pos > count) {
                 count = pos;
                 f(count);
             }
-            return source.success(0);
+            return success(source, undefined);
         };
         return new Parser(logParser);
     }
 
     // Primitives
-    export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? success(source, 1, undefined) : failure(source, undefined));
-    export var empty:    Parser<void> = new Parser((source:Source)=>success(source, 0, undefined));
+    export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? success(source.step(1), undefined) : failure(source, undefined));
+    export var empty:    Parser<void> = new Parser((source:Source)=>success(source, undefined));
 
     // Charactors
     export var spaces:   Parser<string> = regexp(/^\s*/);
@@ -585,6 +542,9 @@ module Parsect{
             (       a === null       ) || (       b === null       )
         ){
             return a === b;
+        }else if(a instanceof Array || b instanceof Array){
+            var xs: Array = <any> a, ys: Array = <any> b;
+            return xs instanceof Array && ys instanceof Array && xs.every((x,i) => jsonEq(ys[i], x));
         }else{
             var f = true;
             for(var x in a){

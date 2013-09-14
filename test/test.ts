@@ -21,7 +21,7 @@ module Tests {
     test("Source object invariance test", function() {
         var src:p.Source = new p.Source("hoge");
         ok(src.equals(new p.Source("hoge", 0)));
-        Parsect.success(src, 2, "2");
+        Parsect.success(src.step(2), "2");
         ok(src.equals(new p.Source("hoge", 0)));    
         Parsect.failure(src, "fail");
         ok(src.equals(new p.Source("hoge", 0)));
@@ -45,28 +45,36 @@ module Tests {
         strictEqual(s.errorMesssage, undefined);
     });
 
-    test("string parser test", function() {
+    test("string parser test1", function() {
         var parser = "hoge";
-
-        // Success
         var source = "hoge";
-        var expectedS = Parsect.success(source, 0, "hoge");
-        ok(p.parse(parser, source).equals(expectedS));
+        var expected = Parsect.success(new p.Source(source, 4), "hoge");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
 
-          // Fail
+    test("string parser test2", function() {
+        var parser = "hoge";
         var source = "piyo";
-        var expected = Parsect.failure(source, "expected \"hoge\"");
-        ok(p.parse(parser, source).equals(expected));
+        var expected = Parsect.failure(source, "\"hoge\"");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
 
-        // Fail
+    test("string parser test3", function() {
+        var parser = "hoge";
         var source = "hopo";
-        var expected = Parsect.failure(source, "expected \"hoge\"");
-        ok(p.parse(parser, source).equals(expected));
+        var expected = Parsect.failure(source, "\"hoge\"");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
 
-          // Fail
+    test("string parser test4", function() {
+        var parser = "hoge";
         var source = "";
-        var expected = Parsect.failure(source, "expected \"hoge\"");
-        ok(p.parse(parser, source).equals(expected));
+        var expected = Parsect.failure(source, "\"hoge\"");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
     interface SeqTestData{
@@ -82,12 +90,12 @@ module Tests {
 
         // Success
         var source = "(hoge)";
-        var expected: Parsect.State<SeqTestData> = Parsect.success<SeqTestData>(source, 6, { 'e': 'hoge' });
+        var expected: Parsect.State<SeqTestData> = p.success<SeqTestData>(new p.Source(source, 6), { 'e': 'hoge' });
         ok(p.parse(parser, source).equals(expected));
 
           // Fail
         var source = "(piyo)";
-        var expected2: Parsect.State<any> = Parsect.failure(new p.Source(source, 1), "expected \"hoge\"");
+        var expected2: Parsect.State<any> = p.failure(new p.Source(source, 1), "\"hoge\"");
         ok(p.parse(parser, source).equals(expected2));
     });
 
@@ -141,6 +149,18 @@ module Tests {
           strictEqual(s.errorMesssage, undefined);
     });
 
+    test("seq 2", ()=>{
+        var parser = p.seq(s=>{
+            var a = s("a");
+            var b = s("b");
+            return s(()=> a + b);
+        }); 
+        var source = "ab";
+        var expected = p.success(new p.Source(source, 2), "ab");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
 
     test("trying test", ()=>{
         var parser = p.trying(p.seq((s)=>{
@@ -149,10 +169,10 @@ module Tests {
             s(")");
             return e;
         }));
-        var parens_a = p.between(p.string('('), p.string('a'), p.string(')'));
-        var parens_b = p.between(p.string('('), p.string('b'), p.string(')'));
+        var parens_a = p.between('(', 'a', ')');
+        var parens_b = p.between('(', 'b', ')');
         //ok(p.parse(parser, "(hoge)").equals(new Parsect.State(new p.Source("(hoge)", 6), true, "hoge")));
-        ok(p.parse(p.or(parens_a, parens_b), "(b)").equals(new Parsect.State(new p.Source("(b)", 1), false, undefined, "expected \"a\"")));
+        ok(p.parse(p.or(parens_a, parens_b), "(b)").equals(new Parsect.State(new p.Source("(b)", 1), false, undefined, "\"a\"")));
         //ok(p.parse(p.or(trying(parens_a), parens_b), "(b)").equals(Parsect.success(new p.Source("(b)", 3), 0, "b")));
     });
 
@@ -183,15 +203,39 @@ module Tests {
 
     test("or function test", ()=>{
         var source = "baabbabaabbbazaabb";
-        var parser = p.map(join, p.many(p.or(p.string("a"), p.string("b"))));
-        var expected = new Parsect.State(new p.Source(source, 13), true, "b,a,a,b,b,a,b,a,a,b,b,b,a");
+        var parser = p.many(p.or("a", "b"));
+        var expected = new Parsect.State(new p.Source(source, 13), true, ["b","a","a","b","b","a","b","a","a","b","b","b","a"]);
         ok(p.parse(parser, source).equals(expected));
     });
 
+    test("head 1", ()=>{
+        var parser = p.head("a", "b");         
+        var source = "ab";
+        var expected = p.success(new p.Source(source, 2), "a");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
+    test("tail 1", ()=>{
+        var parser = p.tail("a", "b");         
+        var source = "ab";
+        var expected = p.success(new p.Source(source, 2), "b");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
+    test("tail 2", ()=>{
+        var parser = p.tail("a", p.head("b", "c"));         
+        var source = "abc";
+        var expected = p.success(new p.Source(source, 3), "b");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });    
+
     test("sepBy1 test 1", ()=>{
         var source = "a_a_a";
-        var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
-        var expected = Parsect.success(source, 5, "a,a,a");
+        var parser = p.sepBy1("a", "_"); 
+        var expected = Parsect.success(new p.Source(source, 5), ["a", "a", "a"]);
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
@@ -199,7 +243,7 @@ module Tests {
     test("sepBy1 test 2", ()=>{
         var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
         var source = "";
-        var expected = Parsect.failure(source, "sepByN: too few tokens.");
+        var expected = Parsect.failure(source, "\"a\"");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
@@ -207,7 +251,7 @@ module Tests {
     test("sepBy1 test 3", ()=>{
         var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
         var source = "a";
-        var expected = Parsect.success(source, 1, "a");
+        var expected = Parsect.success(new p.Source(source, 1), "a");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
@@ -215,44 +259,61 @@ module Tests {
     test("sepBy1 test 4", ()=>{
         var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
         var source = "a_b";
-        var expected = Parsect.failure(new p.Source(source, 2), "expected \"a\"");
+        var expected = Parsect.failure(new p.Source(source, 2), "\"a\"");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
 
+    test("endByN test 1", ()=>{
+        var source = "a;a;a;";
+        var parser = p.endBy("a", ";"); 
+        var expected = Parsect.success(new p.Source(source, 6), ["a", "a", "a"]);
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
+
     test("between test 1", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
         var source = "[a]";
-        var expected = Parsect.success(source, 3, "a");
-        ok(p.parse(parser, source).equals(expected));
+        var expected = Parsect.success(new p.Source(source, 3), "a");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
     test("between test 2", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
         var source = "[b]";
-        var expected = Parsect.failure(new p.Source(source, 1), "expected \"a\"");
+        var expected = Parsect.failure(new p.Source(source, 1), "\"a\"");
         ok(p.parse(parser, source).equals(expected));
     });
 
     test("between test 3", ()=>{
         var parser = p.between('[', 'a', ']'); 
         var source = "[a]";
-        var expected = Parsect.success(source, 3, "a");
+        var expected = Parsect.success(new p.Source(source, 3), "a");
         ok(p.parse(parser, source).equals(expected));
     });
 
+    test("pure 1", ()=>{
+        var parser = p.pure(()=>"x");         
+        var source = "abc";
+        var expected = p.success(new p.Source(source, 0), "x");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    }); 
 
     test("eof test 1", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
         var source = "";
-        var expected = Parsect.success(source, 1,  undefined);
+        var expected = Parsect.success(new p.Source(source, 1),  undefined);
         ok(p.parse(p.eof, source).equals(expected));
     });
 
     test("eof test 2", ()=>{
         var parser = p.tail(p.string("a"), p.eof); 
         var source = "a";
-        var expected = Parsect.success(source, 2,  undefined);
+        var expected = Parsect.success(new p.Source(source, 2),  undefined);
         ok(p.parse(parser, source).equals(expected));
     });
 
@@ -266,7 +327,7 @@ module Tests {
     test("empty test", ()=>{
         var parser = p.empty; 
         var source = "a";
-        var expected = Parsect.success(source, 0,  undefined);
+        var expected = Parsect.success(new p.Source(source, 0),  undefined);
         ok(p.parse(parser, source).equals(expected));
     });
 
@@ -276,7 +337,7 @@ module Tests {
             return i >= 80 && i <= 85;
         })));; 
         var source = "PQRRQPOPhoge";
-        var expected = Parsect.success(source, 6, 'P,Q,R,R,Q,P');
+        var expected = Parsect.success(new p.Source(source, 6), 'P,Q,R,R,Q,P');
         ok(p.parse(parser, source).equals(expected));
     });
 
@@ -286,7 +347,7 @@ module Tests {
             return i >= 80 && i <= 85;
         })));; 
         var source = "XXXXXXXXXXXX";
-        var expected = Parsect.failure(source, 'expected one char of "PQRSTU"');
+        var expected = Parsect.failure(source, 'one of "PQRSTU"');
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
@@ -294,29 +355,38 @@ module Tests {
     test("regexp test 1", ()=>{
         var parser = p.regexp(/abcde/); 
         var source = "abcde";
-        var expected = Parsect.success(source, 5, source);
+        var expected = Parsect.success(new p.Source(source, 5), source);
         ok(p.parse(parser, source).equals(expected));
     });
 
     test("regexp test 2", ()=>{
         var parser = p.regexp(/abc/); 
         var source = "xxabcxx";
-        var expected = Parsect.failure(source, 'expected /abc/');
+        var expected = Parsect.failure(source, '/abc/');
         ok(p.parse(parser, source).equals(expected));
     });
 
     test("regexp test 3", ()=>{
         var parser = p.regexp(/a*/); 
         var source = "aaaaabbbbb";
-        var expected = Parsect.success(source, 5, 'aaaaa');
+        var expected = Parsect.success(new p.Source(source, 5), 'aaaaa');
         ok(p.parse(parser, source).equals(expected));
     });
 
-    test("lazy test 1", ()=>{
+    test("recursive parser 1", ()=>{
         var parser = p.or(/[a-z]/, p.between("[", ()=> parser, "]"));
         var source = "[[[[x]]]]";
-        var expected = Parsect.success(source, 3, 'x');
-        ok(p.parse(parser, source).equals(expected));
+        var expected = Parsect.success(new p.Source(source, 9), 'x');
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
+    test("recursive parser 2", ()=>{
+        var parser = p.or(/[a-z]/, p.between("[", ()=> parser, "]"));
+        var source = "[[[[x]]]";
+        var expected = Parsect.failure(new p.Source(source, 8), '"]"');
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
 
