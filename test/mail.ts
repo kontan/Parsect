@@ -21,7 +21,7 @@ module mail {
 
     // CR             =  %x0D
     //                            ; carriage return
-    var CR: p.Parser<string> = p.char(0x0d);
+    var CR: p.Parser<string> = p.charCode(0x0d);
 
     // CRLF           =  CR LF
     //                            ; Internet standard newline
@@ -29,7 +29,7 @@ module mail {
 
     // CTL            =  %x00-1F / %x7F
     //                             ; controls
-    var CTL: p.Parser<string> = p.or(p.range(0x00, 0x1f), p.char(0x7f));
+    var CTL: p.Parser<string> = p.or(p.range(0x00, 0x1f), p.charCode(0x7f));
 
     // DIGIT          =  %x30-39
     //                            ; 0-9
@@ -37,18 +37,18 @@ module mail {
 
     //DQUOTE         =  %x22
     //                            ; " (Double Quote)
-    var DQUOTE: p.Parser<string> = p.char(0x22);
+    var DQUOTE: p.Parser<string> = p.charCode(0x22);
 
     // HEXDIG         =  DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
     var HEXDIG: p.Parser<string> = p.or(DIGIT, p.string("A"), p.string("B"), p.string("C"), p.string("D"), p.string("E"), p.string("F"));
 
     // HTAB           =  %x09
     //                         ; horizontal tab
-    var HTAB: p.Parser<string> = p.char(0x09);
+    var HTAB: p.Parser<string> = p.charCode(0x09);
 
     // LF             =  %x0A
     //                            ; linefeed
-    var LF: p.Parser<string> = p.char(0x0a);
+    var LF: p.Parser<string> = p.charCode(0x0a);
 
     // LWSP           =  *(WSP / CRLF WSP)
     //                             ; Use of this linear-white-space rule
@@ -66,7 +66,7 @@ module mail {
     var OCTET: p.Parser<string> = p.range(0x00, 0xff);
 
     // SP             =  %x20
-    var SP: p.Parser<string> = p.char(0x20);
+    var SP: p.Parser<string> = p.charCode(0x20);
 
     // VCHAR          =  %x21-7E
     //                             ; visible (printing) characters
@@ -108,15 +108,10 @@ module mail {
     );
 
     // ccontent        =   ctext / quoted-pair / comment
-    var ccontent: p.Parser<string>  = p.or(ctext, quoted_pair, p.lazy(()=> comment));
+    var ccontent: p.Parser<string> = p.or(ctext, quoted_pair, p.lazy(()=> comment));
 
     // comment         =   "(" *([FWS] ccontent) [FWS] ")"
-    var comment: p.Parser<string>  = p.tail(
-        p.string("("), 
-        p.many(p.tail(p.option("", FWS), ccontent)), 
-        p.option("", FWS), 
-        p.string(")")
-    );
+    var comment: p.Parser<string> = p.tail("(", p.many(p.tail(p.optional(FWS), ccontent)), p.optional(FWS), ")");
 
     // CFWS            =   (1*([FWS] comment) [FWS]) / FWS
     var CFWS: p.Parser<string>  = p.or( 
@@ -178,7 +173,7 @@ module mail {
     //                    %d93-126 /         ;  "\" or the quote character
     //                    obs-qtext
     var qtext: p.Parser<string> = p.or(
-        p.char(33),
+        p.charCode(33),
         p.range(35, 91),
         p.range(93, 126),
         p.lazy(()=> obs_q_text )
@@ -306,10 +301,10 @@ module mail {
     //                     %d127              ;  white space characters
     var obs_NO_WS_CTL: p.Parser<string> = p.or(
         p.range(1, 8),
-        p.char(11),
-        p.char(12),
+        p.charCode(11),
+        p.charCode(12),
         p.range(14, 31),
-        p.char(127)
+        p.charCode(127)
     );
 
 
@@ -320,10 +315,10 @@ module mail {
     var obs_q_text: p.Parser<string> = obs_NO_WS_CTL;
 
     // obs-utext       =   %d0 / obs-NO-WS-CTL / VCHAR
-    var obs_utext: p.Parser<string> = p.or( p.char(0), obs_NO_WS_CTL, VCHAR);
+    var obs_utext: p.Parser<string> = p.or( p.charCode(0), obs_NO_WS_CTL, VCHAR);
 
     // obs-qp          =   "\" (%d0 / obs-NO-WS-CTL / LF / CR)
-    var obs_qp: p.Parser<string> = p.tail(p.string("\\"), p.or(p.char(0), obs_NO_WS_CTL, LF, CR));
+    var obs_qp: p.Parser<string> = p.tail(p.string("\\"), p.or(p.charCode(0), obs_NO_WS_CTL, LF, CR));
 
     // obs-body        =   *((*LF *CR *((%d0 / text) *LF *CR)) / CRLF)
 
@@ -413,7 +408,7 @@ module mail {
     // quoted-pairSMTP  = %d92 %d32-126
     //                 ; i.e., backslash followed by any ASCII
     //                 ; graphic (including itself) or SPace
-    var quoted_pairSMTP: p.Parser<string> = p.tail(p.char(92), p.range(32, 126));
+    var quoted_pairSMTP: p.Parser<string> = p.tail(p.charCode(92), p.range(32, 126));
 
     // qtextSMTP      = %d32-33 / %d35-91 / %d93-126
     //               ; i.e., within a quoted string, any

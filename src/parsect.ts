@@ -3,7 +3,6 @@
 
 'use strict';
 
-
 // *HACK* ... function overload combination hack
 interface String {
     parse: (source: Parsect.Source)=>Parsect.State<string>;
@@ -62,14 +61,12 @@ module Parsect{
     }
 
     // create new failure state
-    export function failure<T>(source:Source,                  errorMesssage:string): State<T> ;
-    export function failure<T>(source:string, position:number, errorMesssage:string): State<T> ;
-    export function failure<T>(arg0:any,      arg1:any,        arg2?:any           ): State<T> {
-        var source  = arg0 instanceof Source ? arg0 : new Source(arg0, arg1);
-        var message = arg0 instanceof Source ? arg1 : arg2;
-        return new State<any>(source, false, undefined, message);
+    export function failure<T>(source:string, errorMesssage?:string): State<T> ;
+    export function failure<T>(source:Source, errorMesssage?:string): State<T> ;
+    export function failure<T>(source:any   , errorMesssage?:string): State<T> {
+        source = typeof source === "string" ? new Source(source, 0) : source;
+        return new State<any>(source, false, undefined, errorMesssage);
     }
-
 
     /// parser object
     export class Parser<T>{
@@ -112,10 +109,8 @@ module Parsect{
         else throw new Error();
     }
 
-
     /// seq function context object.
-    export interface Context<S,U>{
-        
+    export interface Context<S,U>{        
         /// パーサをこのコンテキストで実行し、そのパーサの意味値を返します。
         /// パースが失敗した場合は undefined を返します。
         /// コンテキストが失敗している場合は、パースは実行されず undefined が返ります。
@@ -123,11 +118,8 @@ module Parsect{
            (s: string   ): string;
            (p: RegExp   ): string;
 
-        /// 現在のコンテキストのユーザ状態。自由に書き込み、読み込みが可能です。
-        userState: U;
-
-        // (members for debugging)
-        peek: string;
+        userState: U;        /// 現在のコンテキストのユーザ状態。自由に書き込み、読み込みが可能です。
+        peek: string;       // Current input string
         success: boolean;
         value: any;
 
@@ -197,7 +189,7 @@ module Parsect{
         return satisfy((_,i)=> min <= i && i <= max );
     }
 
-    export function char(charCode: number): Parser<string> {
+    export function charCode(charCode: number): Parser<string> {
         assert(typeof charCode === "number" || <Number>charCode instanceof Number);
         return satisfy((_,i)=> i === charCode);
     }    
@@ -262,13 +254,14 @@ module Parsect{
 
     // tail function takes parsers and apply its sequentially.
     // This function returns the State object that last parser returned.
-    export function tail<A              >(a:Parser<A>                                                                                           ):Parser<A>;
-    export function tail<A,B            >(a:Parser<A>, b:Parser<B>                                                                              ):Parser<B>;
-    export function tail<A,B,C          >(a:Parser<A>, b:Parser<B>, c:Parser<C>                                                                 ):Parser<C>;
-    export function tail<A,B,C,D,E      >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>                                                    ):Parser<D>;    
-    export function tail<A,B,C,D,E,F    >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>                                       ):Parser<E>;
-    export function tail<A,B,C,D,E,F,G  >(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>             ):Parser<G>;
-    export function tail<A,B,C,D,E,F,G,H>(a:Parser<A>, b:Parser<B>, c:Parser<C>, d:Parser<D>, e:Parser<E>, f:Parser<F>, g:Parser<G>, h:Parser<H>):Parser<H>;
+    export function tail<T>(                                                                                                         p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>,                                                                                           p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>,                                                                            p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>,                                                             p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>,                                              p:Parser<T>):Parser<T>;    
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>,                               p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>, f:Parser<any>,                p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>, f:Parser<any>, g:Parser<any>, p:Parser<T>):Parser<T>;
     export function tail(...ps:Parser<any>[]): any {
         ps = ps.map(asParser);
         function tailParser(source:Source){
@@ -341,24 +334,9 @@ module Parsect{
 
     // Alternative parser constructors /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    export function sepBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]> {
-        p = asParser(p); sep = asParser(sep);
-        function sepBy1parser(source: Source){
-            return parse(seq(s=>{
-                var x = s(p);
-                var xs = s(many(tail(sep, p)));
-                if(s.success){
-                    xs.unshift(x);
-                    return xs;
-                }
-            }), source);
-        }
-        return new Parser(sepBy1parser);
-    }
-
     export function sepByN<T>(min: number, max: number, p: Parser<T>, sep: Parser<any>): Parser<T[]> {
         p = asParser(p); sep = asParser(sep);
-        if(max < min) throw new Error();
+        assert(min <= max);
         function sepByNParser(source: Source){
             var xs = [];
             var st = success(source, 0, undefined);
@@ -371,21 +349,18 @@ module Parsect{
                 for(var i = 1; i < max; i++){
                     var _st = parse(sep, st.source);
                     if(_st.success){
-                        var __st = parse(p, _st.source);
-                        if(__st.success){
-                            st = __st;
-                            xs.push(__st.value);
-                        }else{
-                            break;
+                        st = parse(p, _st.source);
+                        if(st.success){
+                            xs.push(st.value);
+                            continue;
                         }
-                    }else{
-                        break;
                     }
+                    break;
                 }
             }
 
             if(st.success){
-                return min <= xs.length ? success(st.source, 0, xs) : failure(st.source, 0, "sepByN: too few tokens.");
+                return min <= xs.length ? success(st.source, 0, xs) : failure(st.source, "sepByN: too few tokens.");
             }else{
                 return st;
             }
@@ -394,13 +369,12 @@ module Parsect{
         return new Parser(sepByNParser);
     }
 
+    export function sepBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]> {
+        return sepByN(1, Number.MAX_VALUE, p, sep);
+    }
 
     export function sepBy<T>(p:Parser<T>, sep:Parser<any>): Parser<T[]> {
-        p = asParser(p); sep = asParser(sep);
-        function sepByParser(source:Source){
-            return parse(or(sepBy1(p, sep), map(()=>[], empty)), source);
-        }
-        return new Parser(sepByParser);
+        return sepByN(0, Number.MAX_VALUE, p, sep);
     }
 
     export function endBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]> {
@@ -427,7 +401,7 @@ module Parsect{
         return new Parser<any>(endByFunction);
     }
 
-    export function between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>  ): Parser<T> {
+    export function between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>): Parser<T> {
         open = asParser(open); p = asParser(p); close = asParser(close);
         function betweenParser(source: Source){
             return parse(seq(s=>{
@@ -442,14 +416,12 @@ module Parsect{
 
     // Selective parser constructors //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    export function or<T>(...ps:Parser<T>[]): Parser<T> {
+    export function or<T>(...ps: Parser<T>[]): Parser<T> {
         ps = ps.map(asParser);
         function orParser(source: Source){
             for(var i = 0; i < ps.length; i++){
                 var st = parse(ps[i], source);
-                if(st.success){
-                    return st;
-                }else if(st.source.position != source.position){
+                if(st.success || st.source.position != source.position){
                     return st;
                 }
             }
@@ -624,7 +596,6 @@ module Parsect{
         }
         return f;
     }
-
 
     export module Join {
         export var many:   (p: Parser<string>                                         ) => Parser<string> = p            => map(x=>x.join(''), many(p));

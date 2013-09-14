@@ -1,4 +1,6 @@
-# Parsect / Parser Combinator for TypeScript
+# Parsect / Parser Combinator for JavaScript/TypeScript
+
+** Sorry, this readme text is \*\*OLD\*\* and the API is mostly modified!  **
 
 ## Abstract
 
