@@ -113,18 +113,18 @@ module Parsect{
     /// Parse an input.
     /// This function acceps string primitive value as string parser or RegExp object as regexp parser.
     /// @param parser parser.
-    /// @param input input.
+    /// @param source source.
     /// @return the result of parssing.
-    export function parse<T,U>(parser: Parser<T>, input: string, userState?: U): State<T>;
-    export function parse<T,U>(parser: Parser<T>, input: Source, userState?: U): State<T>;
-    export function parse<T,U>(parser: Parser<T>, input: any   , userState?: U): State<T> {
-             if(input instanceof Source  ) ;
-        else if(typeof input === "string") input = new Source(input);
-        else if(input instanceof String  ) input = new Source(input);
+    export function parse<T,U>(parser: Parser<T>, source: string, userState?: U): State<T>;
+    export function parse<T,U>(parser: Parser<T>, source: Source, userState?: U): State<T>;
+    export function parse<T,U>(parser: Parser<T>, source: any   , userState?: U): State<T> {
+             if(source instanceof Source  ) ;
+        else if(typeof source === "string") source = new Source(source);
+        else if(source instanceof String  ) source = new Source(source);
         else throw new Error();
         var parser = <any>asParser(parser);
         if(<any>parser instanceof Function) parser = (<any>parser)();   // *HACK*
-        return parser.parse(input);
+        return parser.parse(source);
     }
 
     // convert a argument into a string parser.
@@ -155,9 +155,9 @@ module Parsect{
         <T>(f: ()=>T    ): T;
 
         userState: U;        /// 現在のコンテキストのユーザ状態。自由に書き込み、読み込みが可能です。
-        peek: string;       // Current input string
-        success: boolean;
-        value: any;
+        peek: string;           // (readlony) Current input string
+        success: boolean;       // (readonly) 
+        value: any;             // (readonly)
 
         /// このコンテキストの意味値。デフォルトでは空のオブジェクト。
         ///ただし、seq コールバックが undefined 以外の値を返す場合は、out メンバ変数は無視され、その返り値が意味値となる。 
@@ -306,17 +306,24 @@ module Parsect{
         return new Parser(tailParser);
     }
 
-    /// series parser receives an array of Parser and consumes those parser input sequentially.
-    export function series<T>(ps: Parser<T>[]): Parser<T> {
+    /// array parser receives an array of Parser and consumes those parser input sequentially.
+    export function array<T>(ps: Parser<T>[]): Parser<T[]> {
         ps = ps.map(asParser);
-        function seriesParser(source:Source){
+        function arrayParser(source:Source): State<T[]> {
+            var values: T[] = [];
             var st:State<T> = success(source, undefined);
-            for(var i = 0; i < ps.length && st.success; i++){
+            for(var i = 0; i < ps.length; i++){
                 st = parse(ps[i], st.source);
+                if( ! st.success) return failure(st.source, st.expected);
+                values.push(st.value);
             }
-            return st;
+            return success(st.source, values);
         }
-        return new Parser<T>(seriesParser);
+        return new Parser<T[]>(arrayParser);
+    }
+
+    export function series<T>(...ps: Parser<T>[]): Parser<T[]> {
+        return array(ps);
     }
 
     // Repetitious parser constructors ////////////////////////////////////////////////////////////////////////////////////////
@@ -464,7 +471,7 @@ module Parsect{
     }
 
     export function triable<T>(p: Parser<T>): Parser<T> {
-        assert(p instanceof Parser);
+        p = asParser(p);
         function triableParser(source: Source): State<T> {
             var st = parse(p, source);
             return st.success ? st : failure(source, st.expected);
@@ -473,7 +480,7 @@ module Parsect{
     }
 
     export function lookAhead<T>(p: Parser<T>): Parser<T> {
-        assert(p instanceof Parser);
+        p = asParser(p);
         function lookAhead(source:Source){
             var st = parse(p, source);
             return st.success ? success(source, st.value) : st;            
@@ -482,10 +489,10 @@ module Parsect{
     }    
 
     export function notFollowedBy<T>(value: T, p: Parser<T>): Parser<T> {
-        assert(p instanceof Parser);
+        p = asParser(p);
         function notFollowedByParser(source:Source){
             var st = parse(p, source);
-            return st.success ? success(source, value) : failure(st.source, '');
+            return st.success ? failure(st.source, 'unexpected ' + st.value) : success(source, value);
         }
         return new Parser(notFollowedByParser);
     }
@@ -523,26 +530,12 @@ module Parsect{
     export function apply<A,B,C,D,E,F,G,H,R>(m: (a: A, b: B, c: C, d: D, e: E, f: F, g: G, h:H)=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>, pg: Parser<G>, ph: Parser<H>): Parser<R>;    
     export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
         assert(func instanceof Function);
-        return map(xs=>func.apply(undefined, xs), series(ps))
+        return map(xs=>func.apply(undefined, xs), array(ps))
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Build-in Parsees /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    export function log(f: (state: number)=>void): Parser<void>{
-        assert(f instanceof Function);
-        var count = 0;
-        function logParser(source: Source){
-            var pos = Math.floor(source.position / source.source.length);
-            if(pos > count) {
-                count = pos;
-                f(count);
-            }
-            return success(source, undefined);
-        };
-        return new Parser(logParser);
-    }
 
     // Primitives
     export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? success(source.step(1), undefined) : failure(source, undefined));
@@ -562,6 +555,30 @@ module Parsect{
     ////////////////////////////////////////////////////////////////////
     // Util ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////
+
+    export function breakPoint(succ: boolean = true): Parser<any> {
+        return new Parser(function(source: Source){
+            debugger;
+            return succ ? success(source, undefined) : failure(source, "break point");
+        });
+    }
+
+    export function log(f: (state: number)=>void): Parser<void>{
+        assert(f instanceof Function);
+        var count = 0;
+        function logParser(source: Source){
+            var pos = Math.floor(source.position / source.source.length);
+            if(pos > count) {
+                count = pos;
+                f(count);
+            }
+            return success(source, undefined);
+        };
+        return new Parser(logParser);
+    }
+
+
+
 
     /// Compare two jsons
     export function jsonEq<T>(a:T, b:T): boolean {
@@ -594,6 +611,8 @@ module Parsect{
         export function sepBy1(p: Parser<string>, q: Parser<string>                      ): Parser<string> { return map(x=>x.join(''), Parsect.sepBy1(p, q)); }
         export function sepByN(m: number, n: number, p: Parser<string>, q: Parser<string>): Parser<string> { return map(x=>x.join(''), Parsect.sepByN(m, n, p, q)); }
         export function repeat(m: number, n: number, p: Parser<string>                   ): Parser<string> { return map(x=>x.join(''), Parsect.repeat(m, n, p)); }
+        export function array (ps: Parser<string>[]                                      ): Parser<string> { return map(x=>x.join(''), Parsect.array(ps)); }
+        export function series(...ps: Parser<string>[]                                   ): Parser<string> { return map(x=>x.join(''), Parsect.array(ps)); }
     }
 }
 

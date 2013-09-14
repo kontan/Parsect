@@ -12,7 +12,7 @@ module mail {
     var ALPHA: p.Parser<string> = p.or(p.range(0x41, 0x5a), p.range(0x61, 0x7a));
 
     // BIT            =  "0" / "1"
-    var BIT: p.Parser<string> = p.or(p.string("0"), p.string("1"));
+    var BIT: p.Parser<string> = p.or("0", "1");
 
     // CHAR           =  %x01-7F
     //                            ; any 7-bit US-ASCII character,
@@ -23,9 +23,13 @@ module mail {
     //                            ; carriage return
     var CR: p.Parser<string> = p.charCode(0x0d);
 
+    // LF             =  %x0A
+    //                            ; linefeed
+    var LF: p.Parser<string> = p.charCode(0x0a);
+
     // CRLF           =  CR LF
     //                            ; Internet standard newline
-    var CRLF: p.Parser<string> = p.seq(s=>{ var m = s(CR); var n = s(LF); return m + n; });
+    var CRLF: p.Parser<string> = j.series(CR, LF);
 
     // CTL            =  %x00-1F / %x7F
     //                             ; controls
@@ -40,15 +44,12 @@ module mail {
     var DQUOTE: p.Parser<string> = p.charCode(0x22);
 
     // HEXDIG         =  DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
-    var HEXDIG: p.Parser<string> = p.or(DIGIT, p.string("A"), p.string("B"), p.string("C"), p.string("D"), p.string("E"), p.string("F"));
+    var HEXDIG: p.Parser<string> = p.or(DIGIT, "A", "B", "C", "D", "E", "F");
 
     // HTAB           =  %x09
     //                         ; horizontal tab
     var HTAB: p.Parser<string> = p.charCode(0x09);
 
-    // LF             =  %x0A
-    //                            ; linefeed
-    var LF: p.Parser<string> = p.charCode(0x0a);
 
     // LWSP           =  *(WSP / CRLF WSP)
     //                             ; Use of this linear-white-space rule
@@ -82,19 +83,13 @@ module mail {
 
     // 3.2.1.  Quoted characters /////////////////////////////////////////////////////////////////////////
     // quoted-pair     =   ("\" (VCHAR / WSP)) / obs-qp
-    var quoted_pair: p.Parser<string> = p.or(
-        p.tail(p.string("\\"), p.or(VCHAR, WSP)), 
-        p.lazy(()=> obs_qp)
-    );
+    var quoted_pair: p.Parser<string> = p.or(j.series("\\", p.or(VCHAR, WSP)), ()=> obs_qp);
 
     // 3.2.2.  Folding White Space and Comments ///////////////////////////////////////////////////////////////
 
     // FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
     //                                       ; Folding white space
-    var FWS: p.Parser<string>  = p.or(
-        p.tail( p.optional(p.tail(j.many(WSP), CRLF)), j.many1(WSP)), 
-        p.lazy(()=> obs_FWS )
-    );
+    var FWS: p.Parser<string>  = p.or(j.series( p.optional(j.series(j.many(WSP), CRLF)), j.many1(WSP)), ()=> obs_FWS );
 
     // ctext           =   %d33-39 /          ; Printable US-ASCII
     //                   %d42-91 /          ;  characters not including
@@ -104,19 +99,19 @@ module mail {
         p.range(33, 39),
         p.range(42, 91),
         p.range(93, 126),
-        p.lazy(()=> obs_ctext )
+        ()=> obs_ctext
     );
 
     // ccontent        =   ctext / quoted-pair / comment
-    var ccontent: p.Parser<string> = p.or(ctext, quoted_pair, p.lazy(()=> comment));
+    var ccontent: p.Parser<string> = p.or(ctext, quoted_pair, ()=> comment);
 
     // comment         =   "(" *([FWS] ccontent) [FWS] ")"
-    var comment: p.Parser<string> = p.tail("(", p.many(p.tail(p.optional(FWS), ccontent)), p.optional(FWS), ")");
+    var comment: p.Parser<string> = j.series("(", j.many(j.series(p.optional(FWS), ccontent)), p.optional(FWS), ")");
 
     // CFWS            =   (1*([FWS] comment) [FWS]) / FWS
     var CFWS: p.Parser<string>  = p.or( 
-        p.tail(
-            j.many1( p.tail(p.option("", FWS), comment) ), 
+        j.series(
+            j.many1( j.series(p.option("", FWS), comment) ), 
             p.option("", FWS)
         ), 
         FWS
@@ -137,26 +132,26 @@ module mail {
     //                    "~"
     var atext: p.Parser<string> = p.or(
         ALPHA, DIGIT, 
-        p.string("!"), p.string("#"),
-        p.string("$"), p.string("%"),
-        p.string("&"), p.string("'"),
-        p.string("*"), p.string("+"),
-        p.string("-"), p.string("/"),
-        p.string("="), p.string("?"),
-        p.string("^"), p.string("_"),
-        p.string("`"), p.string("{"),
-        p.string("|"), p.string("}"),
-        p.string("~")
+        "!", "#",
+        "$", "%",
+        "&", "'",
+        "*", "+",
+        "-", "/",
+        "=", "?",
+        "^", "_",
+        "`", "{",
+        "|", "}",
+        "~"
     );
 
     // atom            =   [CFWS] 1*atext [CFWS]
     var atom: p.Parser<string> = p.between(p.optional(CFWS), j.many1(atext), p.optional(CFWS)); 
 
     // dot-atom-text   =   1*atext *("." 1*atext)
-    var dot_atom_text: p.Parser<string> = j.sepBy1(j.many1(atext), p.string("."));
+    var dot_atom_text: p.Parser<string> = j.sepBy1(j.many1(atext), ".");
 
     // dot-atom        =   [CFWS] dot-atom-text [CFWS]
-    var dot_atom: p.Parser<string> = p.between(p.optional(CFWS), j.many1(p.lazy(()=>dot_atom_text)), p.optional(CFWS));
+    var dot_atom: p.Parser<string> = p.between(p.optional(CFWS), j.many1(()=>dot_atom_text), p.optional(CFWS));
 
     // specials        =   "(" / ")" /        ; Special characters that do
     //                    "<" / ">" /        ;  not appear in atext
@@ -176,7 +171,7 @@ module mail {
         p.charCode(33),
         p.range(35, 91),
         p.range(93, 126),
-        p.lazy(()=> obs_q_text )
+        ()=> obs_q_text
     );
 
     // qcontent        =   qtext / quoted-pair
@@ -189,10 +184,7 @@ module mail {
         p.optional(CFWS),
         p.between(
             DQUOTE, 
-            j.many(p.seq(s=>{
-                s(p.optional(FWS));
-                return s(qcontent);
-            })),
+            j.many(j.series(p.optional(FWS), qcontent)),
             DQUOTE
         ),
         p.optional(CFWS)
@@ -204,7 +196,7 @@ module mail {
     var word: p.Parser<string> = p.or(atom, quoted_string);
 
     // phrase          =       1*word / obs-phrase
-    var phrase: p.Parser<string> = p.or(j.many1(word), p.lazy(()=> obs_phrase));
+    var phrase: p.Parser<string> = p.or(j.many1(word), ()=> obs_phrase);
 
     // unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
 
@@ -222,7 +214,7 @@ module mail {
     // angle-addr      =   [CFWS] "<" addr-spec ">" [CFWS] /
     //                    obs-angle-addr
     var angle_addr: p.Parser<string> = p.or(
-        p.tail(
+        j.series(
             p.optional(CFWS),
             p.string("<"),
             p.lazy(()=> addr_spec ),
@@ -233,7 +225,7 @@ module mail {
     );
 
     // group           =   display-name ":" [group-list] ";" [CFWS]
-//    var group: p.Parser<string> = p.tailj(
+//    var group: p.Parser<string> = j.seriesj(
 //        display_name, 
 //        p.string(":"),  
 //        p.optional(group_list),
@@ -257,28 +249,28 @@ module mail {
 
     // addr-spec       =   local-part "@" domain
     var addr_spec: p.Parser<string> = p.seq((s,o)=>{
-        o.localPart = s(p.lazy(()=>local_part)); 
-        s(p.string("@"));
-        o.domain = s(p.lazy(()=> domain));
+        o.localPart = s(()=>local_part);
+        s("@");
+        o.domain = s(()=> domain);
     });
 
     // local-part      =   dot-atom / quoted-string / obs-local-part
-    var local_part: p.Parser<string> = p.or(dot_atom, quoted_string, p.lazy(()=> obs_local_part ));
+    var local_part: p.Parser<string> = p.or(p.triable(dot_atom), p.triable(quoted_string), ()=> obs_local_part );
 
     // domain          =   dot-atom / domain-literal / obs-domain
     var domain: p.Parser<string> = p.or(
-        p.lazy(()=> obs_domain), // 順番変えてある
-        dot_atom, 
-        p.lazy(()=> domain_literal ) 
+        p.triable(()=> obs_domain), // 順番変えてある
+        p.triable(dot_atom), 
+        p.triable(()=> domain_literal) 
     );
 
     // domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
     var domain_literal: p.Parser<string> = p.seq((s,o)=>{
         s(p.optional(CFWS)); 
-        s(p.string("["));
-        var domain = s(p.many(p.tail(p.optional(FWS), p.lazy(()=> dtext) ))); 
+        s("[");
+        var domain = s(j.many(j.series(p.optional(FWS), ()=> dtext ))); 
         s(p.optional(FWS)); 
-        s(p.string("]"));
+        s("]");
         s(p.optional(CFWS));
         return domain;
     });
@@ -289,7 +281,7 @@ module mail {
     var dtext: p.Parser<string> = p.or(
         p.range(33, 90),
         p.range(94, 126),
-        p.lazy(()=> obs_dtext )
+        ()=> obs_dtext
     );
 
     // 4.1.  Miscellaneous Obsolete Tokens /////////////////////////////////////////////////////////////////////
@@ -318,14 +310,14 @@ module mail {
     var obs_utext: p.Parser<string> = p.or( p.charCode(0), obs_NO_WS_CTL, VCHAR);
 
     // obs-qp          =   "\" (%d0 / obs-NO-WS-CTL / LF / CR)
-    var obs_qp: p.Parser<string> = p.tail(p.string("\\"), p.or(p.charCode(0), obs_NO_WS_CTL, LF, CR));
+    var obs_qp: p.Parser<string> = j.series("\\", p.or(p.charCode(0), obs_NO_WS_CTL, LF, CR));
 
     // obs-body        =   *((*LF *CR *((%d0 / text) *LF *CR)) / CRLF)
 
     // obs-unstruct    =   *((*LF *CR *(obs-utext *LF *CR)) / FWS)
 
     // obs-phrase      =   word *(word / "." / CFWS)
-    var obs_phrase: p.Parser<string> = p.tail(word, j.many1(p.or(word, p.string("."), CFWS)));
+    var obs_phrase: p.Parser<string> = j.series(word, j.many1(p.or(word, ".", CFWS)));
 
     // obs-phrase-list =   [phrase / CFWS] *("," [phrase / CFWS])    
 
@@ -369,9 +361,9 @@ module mail {
     // ココの定義、このままだと *( ALPHA / DIGIT / "-" ) が読みすぎて Let-dig　の分がなくなってしまう。 
     // ( ALPHA / DIGIT / "-" ) は次の要素が ( ALPHA / DIGIT / "-" ) か Let-dig なら読み進めていいから、
     // lookAhead(Let_dig) する
-    var Ldh_str: p.Parser<string> = p.tail(
+    var Ldh_str: p.Parser<string> = j.series(
         j.many(p.triable(p.seq(s=>{
-            var c = s(p.or(ALPHA, DIGIT, p.string("-"))); 
+            var c = s(p.or(ALPHA, DIGIT, "-")); 
             s(p.lookAhead(Let_dig));
             return c;
         }))), 
@@ -380,7 +372,7 @@ module mail {
 
 
     // sub-domain     = Let-dig [Ldh-str]
-    //var sub_domain: p.Parser<string> = p.head(Let_dig, p.optional(Ldh_str));
+    //var sub_domain: p.Parser<string> = j.series(Let_dig, p.optional(Ldh_str));
     var sub_domain: p.Parser<string> = p.seq(s=>{
         var h = s(Let_dig);
         var c = s(p.optional(Ldh_str));
@@ -392,13 +384,13 @@ module mail {
     //                 General-address-literal ) "]"
     //                 ; See Section 4.1.3
     var address_literal: p.Parser<string> = p.seq(s=>{
-        s(p.string("["));
+        s("[");
         var a = s(p.or( 
-            p.lazy(()=> IPv4_address_literal), 
-            p.lazy(()=> IPv6_address_literal), 
-            p.lazy(()=> General_address_literal)
+            ()=> IPv4_address_literal,
+            ()=> IPv6_address_literal, 
+            ()=> General_address_literal
         ));
-        s(p.string("]"));
+        s("]");
         return a;
     });
 
@@ -425,14 +417,20 @@ module mail {
 
 
     // Domain         = sub-domain *("." sub-domain)
-    var Domain: p.Parser<string> = j.sepBy1(sub_domain, p.string("."));
+    var Domain: p.Parser<string> = j.sepBy1(sub_domain, ".");
 
     // Dot-string     = Atom *("."  Atom)
-    var Dot_string: p.Parser<string> = j.sepBy1(Atom, p.string("."));
+    //var Dot_string: p.Parser<string> = j.sepBy1(Atom, ".");
+    var Dot_string: p.Parser<string> = j.sepBy1(atom, ".");
 
     // Local-part     = Dot-string / Quoted-string
     //               ; MAY be case-sensitive
-    var Local_part: p.Parser<string> = p.or(Dot_string, Quoted_string);
+    
+    // obs_local_part は RFC5322 で定義されている。5321にはない
+    var Local_part: p.Parser<string> = p.or(
+        p.triable(Dot_string), 
+        p.triable(p.head(Quoted_string, p.lookAhead("@"))), //  obs_local_part のぶんまで食べてしまわないように、lookAhead
+        ()=>obs_local_part);
 
     // String         = Atom / Quoted-string    
 
@@ -440,7 +438,7 @@ module mail {
     var Mailbox: p.Parser<string> = p.seq((s,o)=>{
         o.localPart = s(Local_part); 
         s("@"); 
-        o.domain = s(p.or(Domain, address_literal));
+        o.domain = s(p.or(domain, address_literal)); //o.domain = s(p.or(Domain, address_literal));
     });
 
 
@@ -464,19 +462,19 @@ module mail {
     var IPv6_hex: p.Parser<string> = j.repeat(1, 4, HEXDIG);
 
     // IPv6-full      = IPv6-hex 7(":" IPv6-hex)
-    var IPv6_full: p.Parser<string> = j.sepByN(8, 8, IPv6_hex, p.string(":"));
+    var IPv6_full: p.Parser<string> = j.sepByN(8, 8, IPv6_hex, ":");
 
     // IPv4-address-literal  = Snum 3("."  Snum)
-    var IPv4_address_literal: p.Parser<string> = j.sepByN(4, 4, p.lazy(()=> Snum), p.string("."));
+    var IPv4_address_literal: p.Parser<string> = j.sepByN(4, 4, ()=> Snum, ".");
 
     // IPv6-address-literal  = "IPv6:" IPv6-addr
-    var IPv6_address_literal: p.Parser<string> = p.seq(s=>{
-        s(p.string("IPv6:"));
-        s(p.lazy(()=> IPv6_addr));
-    });
+    var IPv6_address_literal: p.Parser<string> = j.array(["IPv6:", ()=> IPv6_addr]);
 
     // General-address-literal  = Standardized-tag ":" 1*dcontent
-    var General_address_literal: p.Parser<string> = p.tail(Standardized_tag, p.string(":"), j.many1(dcontent));
+    var General_address_literal: p.Parser<string> = j.series(Standardized_tag, ":", j.many1(dcontent));
+
+    var __ipv6s_segment6 = j.series(IPv6_hex, j.repeat(0, 5, p.triable(j.series(":", IPv6_hex, p.notFollowedBy("", ".")))));
+    var __ipv6s_segment4 = j.series(IPv6_hex, j.repeat(0, 3, p.triable(j.series(":", IPv6_hex, p.notFollowedBy("", ".")))));
 
     // IPv6-comp      = [IPv6-hex *5(":" IPv6-hex)] "::"
     //                  [IPv6-hex *5(":" IPv6-hex)]
@@ -484,14 +482,14 @@ module mail {
     //               ; zeros.  No more than 6 groups in addition to the
     //               ; "::" may be present.
     var IPv6_comp: p.Parser<string> = p.seq((s,o)=>{
-        s(p.sepByN(0, 6, IPv6_hex, p.string(":")));
+        s(p.optional(__ipv6s_segment6));
         s("::");
-        s(p.sepByN(0, 6, IPv6_hex, p.string(":")));
+        s(p.optional(__ipv6s_segment6));
     });
     
     // IPv6v4-full    = IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
     var IPv6v4_full: p.Parser<string> = p.seq((s,o)=>{
-        s(p.sepByN(6, 6, IPv6_hex, p.string(":")));
+        s(p.optional(__ipv6s_segment6));
         s(":");
         s(IPv4_address_literal);
     });
@@ -503,26 +501,19 @@ module mail {
     //               ; zeros.  No more than 4 groups in addition to the
     //               ; "::" and IPv4-address-literal may be present.
     var IPv6v4_comp: p.Parser<string> = p.seq((s,o)=>{
-        s(p.sepByN(0, 4, IPv6_hex, p.string(":"))); 
+        s(p.optional(__ipv6s_segment4)); //s(p.sepByN(0, 4, IPv6_hex, p.triable(":")));   // IPv6 の区切り文字が : で、
         s("::");
-        // 12.34.56.78] 
-        // という入力で、これはipv4のアドレスであるにも関わらず、先頭の12をipv4のアドレスとして読んでしまう。
-        // 仕方ないので、さきにipv4として読めるかどうか試す
-        s(p.or(
-            p.triable(IPv4_address_literal),
-            p.seq(s=>{
-                s(p.sepByN(0, 4, IPv6_hex, p.string(":")));
-                s(IPv4_address_literal);
-            })
-        ));
+        s(p.optional(p.triable(j.series(__ipv6s_segment4, ":"))));
+        s(IPv4_address_literal);
+        return "";
     });  
 
     // IPv6-addr      = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
     var IPv6_addr: p.Parser<string> = p.or(
-        p.triable(IPv6v4_comp),    // 順番変えた
-        p.triable(IPv6_full),  
-        p.triable(IPv6_comp),
-        IPv6v4_full
+        p.triable(p.head(IPv6v4_full, p.lookAhead("]"))),        
+        p.triable(p.head(IPv6v4_comp, p.lookAhead("]"))),    // 順番変えた
+        p.triable(p.head(IPv6_full, p.lookAhead("]"))),  
+        p.triable(p.head(IPv6_comp, p.lookAhead("]")))
     );
 
 
@@ -538,26 +529,26 @@ module mail {
     var obs_angle_addr: p.Parser<string> = p.between(
         p.optional(CFWS),
         p.between(
-            p.optional(p.string("<")),
-            p.tail(p.lazy(()=> obs_route), addr_spec),
-            p.optional(p.string(">"))
+            p.optional("<"),
+            j.series(()=> obs_route, addr_spec),
+            p.optional(">")
         ),
         p.optional(CFWS)
     );
 
     // obs-route       =   obs-domain-list ":"
-    var obs_route: p.Parser<string> = p.tail(p.lazy(()=> obs_domain_list), p.string(":"));
+    var obs_route: p.Parser<string> = j.series(()=> obs_domain_list, ":");
 
     // obs-domain-list =   *(CFWS / ",") "@" domain
     //                     *("," [CFWS] ["@" domain])
     var obs_domain_list: p.Parser<string> = p.seq(s=>{
-        s(p.many(p.or(CFWS, p.string(","))));
-        s(p.string("@")); 
+        s(j.many(p.or(CFWS, ",")));
+        s("@"); 
         s(domain);
-        s(p.many(p.tail(
-            p.string(","), 
+        s(j.many(j.series(
+            ",", 
             p.optional(CFWS), 
-            p.optional(p.tail(p.string("@"), domain))
+            p.optional(j.series("@", domain))
         )));
     });
 
@@ -576,13 +567,13 @@ module mail {
     //);
 
     // obs-group-list  =   1*([CFWS] ",") [CFWS]
-    var obs_group_list: p.Parser<string> = j.sepBy1(p.option("", CFWS), p.string(","));
+    var obs_group_list: p.Parser<string> = j.sepBy1(p.option("", CFWS), ",");
 
     // obs-local-part  =   word *("." word)
-    var obs_local_part: p.Parser<string> = j.sepBy1(word, p.string("."));
+    var obs_local_part: p.Parser<string> = j.sepBy1(word, ".");
 
     // obs-domain      =   atom *("." atom)
-    var obs_domain: p.Parser<string> =  j.sepBy1(atom, p.string("."));
+    var obs_domain: p.Parser<string> =  j.sepBy1(atom, ".");
 
     // obs-dtext       =   obs-NO-WS-CTL / quoted-pair
     var obs_dtext: p.Parser<string> = p.or(obs_NO_WS_CTL, quoted_pair);
@@ -593,6 +584,7 @@ module mail {
         if(address.length >= 257) return false;
         var parser = Mailbox;
         var result = p.parse(p.seq(s=>{ s(parser);  s(p.eof); }), address);
+        console.log(result.value);
         return result.success;
     }
 
