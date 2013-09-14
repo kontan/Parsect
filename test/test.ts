@@ -35,14 +35,14 @@ module Tests {
         ok(s.success);
         strictEqual(s.source.position, 4);
         strictEqual(s.value, "hoge");
-        strictEqual(s.errorMesssage, undefined);
+        strictEqual(s.expected, undefined);
 
         // Success
         var s = p.parse(parser, "hoge");
         ok(s.success);
         strictEqual(s.source.position, 4);
         strictEqual(s.value, "hoge");
-        strictEqual(s.errorMesssage, undefined);
+        strictEqual(s.expected, undefined);
     });
 
     test("string parser test1", function() {
@@ -72,7 +72,7 @@ module Tests {
     test("string parser test4", function() {
         var parser = "hoge";
         var source = "";
-        var expected = Parsect.failure(source, "\"hoge\"");
+        var expected = p.failure(source, "\"hoge\"");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
@@ -90,18 +90,17 @@ module Tests {
 
         // Success
         var source = "(hoge)";
-        var expected: Parsect.State<SeqTestData> = p.success<SeqTestData>(new p.Source(source, 6), { 'e': 'hoge' });
+        var expected: p.State<SeqTestData> = p.success<SeqTestData>(new p.Source(source, 6), { 'e': 'hoge' });
         ok(p.parse(parser, source).equals(expected));
 
           // Fail
         var source = "(piyo)";
-        var expected2: Parsect.State<any> = p.failure(new p.Source(source, 1), "\"hoge\"");
+        var expected2: p.State<any> = p.failure(new p.Source(source, 1), "\"hoge\"");
         ok(p.parse(parser, source).equals(expected2));
     });
 
     interface SeqTestJsonData{
         name: string;
-        type: string;
         args: SeqTestJsonDataArgs[];
         ret: string;
     }
@@ -112,44 +111,7 @@ module Tests {
         type: string;
     }
 
-    test("seq parser json ast test", function() {
-        var identifier = p.regexp(/[A-z]+/);
-
-        var argParser: Parsect.Parser<SeqTestJsonDataArgs> = p.seq<SeqTestJsonDataArgs,void>((s,o)=>{
-            o.name = s(identifier);
-            o.optional = s(p.optional('?'));
-            s(':');
-            o.type = s(identifier);
-        });
-
-        var argsParser: Parsect.Parser<SeqTestJsonDataArgs[]> = p.sepBy(argParser,  p.string(','));
-
-        var parser: Parsect.Parser<SeqTestJsonData> = p.seq<SeqTestJsonData,void>((s,o)=>{
-            o.name = s(identifier);
-            s('(');
-            o.args = s(argsParser);
-            s(')');
-            s(':');
-            o.ret = s(identifier);
-        });
-
-        // Success
-        var input = "indexOf(searchString:string,position?:number):number";
-        var s = p.parse(parser, input);
-        ok(s.success);
-          strictEqual(s.source.position, input.length);
-          ok(Parsect.jsonEq(s.value, { 
-          	'name': 'indexOf', 
-          	'args': [ 
-          		{ 'name': 'searchString', 'optional': undefined, 'type': 'string' },
-          		{ 'name': 'position', 'optional': '?', 'type': 'number' },
-          	],
-          	'ret': 'number' 
-          }));
-          strictEqual(s.errorMesssage, undefined);
-    });
-
-    test("seq 2", ()=>{
+    test("seq 1", ()=>{
         var parser = p.seq(s=>{
             var a = s("a");
             var b = s("b");
@@ -161,8 +123,7 @@ module Tests {
         ok(result.equals(expected));
     });
 
-
-    test("trying test", ()=>{
+    test("trying 1", ()=>{
         var parser = p.trying(p.seq((s)=>{
             s("(");
             var e = s("hoge");
@@ -171,41 +132,68 @@ module Tests {
         }));
         var parens_a = p.between('(', 'a', ')');
         var parens_b = p.between('(', 'b', ')');
-        //ok(p.parse(parser, "(hoge)").equals(new Parsect.State(new p.Source("(hoge)", 6), true, "hoge")));
-        ok(p.parse(p.or(parens_a, parens_b), "(b)").equals(new Parsect.State(new p.Source("(b)", 1), false, undefined, "\"a\"")));
-        //ok(p.parse(p.or(trying(parens_a), parens_b), "(b)").equals(Parsect.success(new p.Source("(b)", 3), 0, "b")));
+        var parser = p.or(parens_a, parens_b);
+
+        var source = "(b)";
+        var expected = p.failure(new p.Source("(b)", 1), "\"a\"");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("count function test", ()=>{
-        var parser:Parsect.Parser<string> = p.map(join,  p.count(3, "a"));
-        ok(p.parse(parser, "aaa").equals(new Parsect.State(new p.Source("aaa", 3), true, "a,a,a")));
+    test("count 1", ()=>{
+        var parser = p.map(join,  p.count(3, "a"));
+        var source = "aaa";
+        var expected = p.success(new p.Source("aaa", 3), "a,a,a");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("many function test", ()=>{
-        var parser:Parsect.Parser<string> = p.map(join, p.many("a"));
-        ok(p.parse(parser, "aa").equals(new Parsect.State(new p.Source("aa", 2), true, "a,a")));
+    test("many 1", ()=>{
+        var parser = p.map(join, p.many("a"));
+        var source = "aa";
+        var expected = p.success(new p.Source("aa", 2), "a,a");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("many1 function test", ()=>{
-        var parser:Parsect.Parser<string> = p.map( join, p.many1("a"));
-        ok(p.parse(parser, "aaaaaaa").equals(new Parsect.State(new p.Source("aaaaaaa", 7), true, "a,a,a,a,a,a,a")));
+    test("many1 1", ()=>{
+        var parser = p.map( join, p.many1("a"));
+        var source = "aaaaaaa";
+        var expected = p.success(new p.Source("aaaaaaa", 7), "a,a,a,a,a,a,a");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("many1 function test", ()=>{
-        var parser:Parsect.Parser<string> = p.map(join, p.many1("a"));
-        ok(p.parse(parser, "aaaaaaa").equals(new Parsect.State(new p.Source("aaaaaaa", 7), true, "a,a,a,a,a,a,a")));
+    test("many1 2", ()=>{
+        var parser = p.map(join, p.many1("a"));
+        var source = "aaaaaaa";
+        var expected = p.success(new p.Source("aaaaaaa", 7), "a,a,a,a,a,a,a");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("number parser test", ()=>{
-        var expected = new Parsect.State(new p.Source("-123.567", 8), true, -123.567);
-        ok(p.parse(p.number, "-123.567").equals(expected));
+    test("number 1", ()=>{
+        var parser = p.number;
+        var source = "-123.567";
+        var expected = p.success(new p.Source("-123.567", 8), -123.567);
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("or function test", ()=>{
+    test("or 1", ()=>{
         var source = "baabbabaabbbazaabb";
         var parser = p.many(p.or("a", "b"));
         var expected = new Parsect.State(new p.Source(source, 13), true, ["b","a","a","b","b","a","b","a","a","b","b","b","a"]);
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
+    test("or 2", ()=>{
+        var source = "x";
+        var parser = p.or("a", "b", /c/);
+        var expected = p.failure(new p.Source(source, 0), "one of \"a\",\"b\",/c/");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
     test("head 1", ()=>{
@@ -232,7 +220,7 @@ module Tests {
         ok(result.equals(expected));
     });    
 
-    test("sepBy1 test 1", ()=>{
+    test("sepBy1 1", ()=>{
         var source = "a_a_a";
         var parser = p.sepBy1("a", "_"); 
         var expected = Parsect.success(new p.Source(source, 5), ["a", "a", "a"]);
@@ -240,31 +228,31 @@ module Tests {
         ok(result.equals(expected));
     });
 
-    test("sepBy1 test 2", ()=>{
-        var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
+    test("sepBy1 2", ()=>{
+        var parser = p.map(join, p.sepBy1("a", "_")); 
         var source = "";
         var expected = Parsect.failure(source, "\"a\"");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
 
-    test("sepBy1 test 3", ()=>{
-        var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
+    test("sepBy1 3", ()=>{
+        var parser = p.map(join, p.sepBy1("a", "_")); 
         var source = "a";
         var expected = Parsect.success(new p.Source(source, 1), "a");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
 
-    test("sepBy1 test 4", ()=>{
-        var parser = p.map(join, p.sepBy1(p.string("a"), p.string("_"))); 
+    test("sepBy1 4", ()=>{
+        var parser = p.map(join, p.sepBy1("a", "_")); 
         var source = "a_b";
         var expected = Parsect.failure(new p.Source(source, 2), "\"a\"");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
 
-    test("endByN test 1", ()=>{
+    test("endByN 1", ()=>{
         var source = "a;a;a;";
         var parser = p.endBy("a", ";"); 
         var expected = Parsect.success(new p.Source(source, 6), ["a", "a", "a"]);
@@ -273,22 +261,22 @@ module Tests {
     });
 
 
-    test("between test 1", ()=>{
-        var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
+    test("between 1", ()=>{
+        var parser = p.between('[', 'a', ']'); 
         var source = "[a]";
         var expected = Parsect.success(new p.Source(source, 3), "a");
         var result = p.parse(parser, source);
         ok(result.equals(expected));
     });
 
-    test("between test 2", ()=>{
-        var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
+    test("between 2", ()=>{
+        var parser = p.between('[', 'a', ']'); 
         var source = "[b]";
         var expected = Parsect.failure(new p.Source(source, 1), "\"a\"");
         ok(p.parse(parser, source).equals(expected));
     });
 
-    test("between test 3", ()=>{
+    test("between 3", ()=>{
         var parser = p.between('[', 'a', ']'); 
         var source = "[a]";
         var expected = Parsect.success(new p.Source(source, 3), "a");
@@ -303,45 +291,50 @@ module Tests {
         ok(result.equals(expected));
     }); 
 
-    test("eof test 1", ()=>{
-        var parser = p.between(p.string('['), p.string('a'), p.string(']')); 
+    test("eof 1", ()=>{
+        var parser = p.eof; 
         var source = "";
         var expected = Parsect.success(new p.Source(source, 1),  undefined);
-        ok(p.parse(p.eof, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("eof test 2", ()=>{
-        var parser = p.tail(p.string("a"), p.eof); 
+    test("eof 2", ()=>{
+        var parser = p.tail("a", p.eof); 
         var source = "a";
         var expected = Parsect.success(new p.Source(source, 2),  undefined);
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("eof test 2", ()=>{
+    test("eof 2", ()=>{
         var parser = p.eof; 
         var source = "a";
         var expected = Parsect.failure(source, undefined);
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("empty test", ()=>{
+    test("empty 1", ()=>{
         var parser = p.empty; 
         var source = "a";
         var expected = Parsect.success(new p.Source(source, 0),  undefined);
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("satisfy test 1", ()=>{
+    test("satisfy 1", ()=>{
         var parser = p.map(join, p.many1(p.satisfy(c=>{ 
             var i = c.charCodeAt(0);
             return i >= 80 && i <= 85;
         })));; 
         var source = "PQRRQPOPhoge";
         var expected = Parsect.success(new p.Source(source, 6), 'P,Q,R,R,Q,P');
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("satisfy test 2", ()=>{
+    test("satisfy 2", ()=>{
         var parser = p.map(join, p.many1(p.satisfy(c=>{ 
             var i = c.charCodeAt(0);
             return i >= 80 && i <= 85;
@@ -352,25 +345,28 @@ module Tests {
         ok(result.equals(expected));
     });
 
-    test("regexp test 1", ()=>{
+    test("regexp 1", ()=>{
         var parser = p.regexp(/abcde/); 
         var source = "abcde";
         var expected = Parsect.success(new p.Source(source, 5), source);
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("regexp test 2", ()=>{
+    test("regexp 2", ()=>{
         var parser = p.regexp(/abc/); 
         var source = "xxabcxx";
         var expected = Parsect.failure(source, '/abc/');
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
-    test("regexp test 3", ()=>{
+    test("regexp 3", ()=>{
         var parser = p.regexp(/a*/); 
         var source = "aaaaabbbbb";
         var expected = Parsect.success(new p.Source(source, 5), 'aaaaa');
-        ok(p.parse(parser, source).equals(expected));
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
     });
 
     test("recursive parser 1", ()=>{
@@ -389,6 +385,62 @@ module Tests {
         ok(result.equals(expected));
     });
 
+    test("non-cfg 1", ()=>{
+        // { a^n b^n c^n | n >= 0 } = { "", "abc", "aabbcc", "aaabbbccc", ... }
+        var parser = p.seq(s=>{
+            var a = s(p.many("a"));
+            var b = s(p.count(a.length, "b"));
+            var c = s(p.count(a.length, "c"));
+            return [a, b, c];
+        });
+        
+        var source = "aaaabbbbcccc";
+        var expected = Parsect.success(new p.Source(source, 12), [["a", "a", "a", "a"], ["b", "b", "b", "b"], ["c", "c", "c", "c"]]);
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+
+        var source2 = "aaaabbbbcc";
+        var expected2 = Parsect.failure(new p.Source(source2, 10), "\"c\"");
+        var result2 = p.parse(parser, source2);
+        ok(result2.equals(expected2));
+    });
+
+    test("seq parser json ast", function() {
+        var identifier = p.regexp(/[A-z]+/);
+
+        var argParser: Parsect.Parser<SeqTestJsonDataArgs> = p.seq<SeqTestJsonDataArgs,void>((s,o)=>{
+            o.name = s(identifier);
+            o.optional = s(p.optional('?'));
+            s(':');
+            o.type = s(identifier);
+        });
+
+        var argsParser: Parsect.Parser<SeqTestJsonDataArgs[]> = p.sepBy(argParser,  p.string(','));
+
+        var parser: Parsect.Parser<SeqTestJsonData> = p.seq<SeqTestJsonData,void>((s,o)=>{
+            o.name = s(identifier);
+            s('(');
+            o.args = s(argsParser);
+            s(')');
+            s(':');
+            o.ret = s(identifier);
+        });
+
+        // Success
+        var source = "indexOf(searchString:string,position?:number):number";
+        var expected: p.State<SeqTestJsonData> = p.success(new p.Source(source, source.length), 
+            { 
+                'name': 'indexOf', 
+                'args': [ 
+                    { 'name': 'searchString', 'optional': undefined, 'type': 'string' },
+                    { 'name': 'position', 'optional': '?', 'type': 'number' },
+                ],
+                'ret': 'number' 
+            }
+        );
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
 
     interface URIParams{
         name: string;

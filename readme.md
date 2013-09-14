@@ -1,14 +1,14 @@
-# Parsect / Parser Combinator for JavaScript/TypeScript
+# Parsect : Parser Combinator for JavaScript/TypeScript
 
 ** Sorry, this readme text is \*\*OLD\*\* and the API is mostly modified!  **
 
 ## Abstract
 
-**Parsect** is a parser combinator library for [TypeScript](http://www.typescriptlang.org/). It provides a easy way to write a readable parser in only TypeScript/JavaScript without any other domain-specific language like yacc/lex or ANTLR. Naturally it can also be used from not only TypeScript and JavaScript.
+**Parsect** is a parser combinator library for [TypeScript](http://www.typescriptlang.org/). It provides a easy way to write a readable parser in only TypeScript/JavaScript without any other domain-specific language like yacc/lex ANTLR or PEG.js. Naturally it can also be used from not only TypeScript and JavaScript.
 
 I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Parsec) parser combinator library in Haskell, however this is not a porting of Parsec. Unfortunately, this library doesn't have underlying Monad or Fanctor and it doesn't deal a string as a list of charactor. However, you can combine parsers in the same manner as Parsec with Parsect. 
 
-Parsect characteristically has Haskell's **do notation**-like notation style. This notation makes a parser more readable. Additionally, **Regular Expression Parser** also is supported. You can combine RegExp parsers with other parsers. 
+Parsect characteristically has Haskell's do notation-like notation style. This notation makes a parser more readable. Additionally, a regular expression parser also is supported and you can combine RegExp parsers with other parsers. 
 
 Debugging parser is easy. You can set a breakpoint in the middle of your parser and watch that the parser consumes the input step-by-step.　 
 
@@ -16,7 +16,7 @@ Debugging parser is easy. You can set a breakpoint in the middle of your parser 
 
 In the following sample codes, most of identifiers are not prefixed with the module name. All functions or Classes are in *Parsect* module but Parsect's *globals.ts* binds those identifiers to global namespace (It's a bad practice but I'm so lazy!). If you would not use those global indentifiers, you need to add a prefix of module name "Parsect" to all identifiers or *import* the module. 
 
-### *number* parsers
+### *number* parser
 
 Parsect provides some commonly-used parsers. **number** is a built-in parser that parse a numeral strings. **number** is a **Persect.Parser** object and a Parser object has **parse** function in it's property. *parse* takes a string parameter as input. So following code parses numeric riteral "−273.15" with *number* parser. 
 
@@ -34,7 +34,7 @@ Parsect provides some commonly-used parsers. **number** is a built-in parser tha
 You can get the raw parsing result value from the *value* property of the *State* obbject. *number* parser returns string as a raw result but some parsers returns other type value. 
 You can consider all parsers a imutable objects. Any parsing would not modify the parser and you can reuse those parsers as many times you want. Additionally you should not change any parser's property.
 
-### *string* function
+### *string* constructor
 
 Parsect has some functions that creates a parser. **string** function is one of them. *string* take a string and return new parser. This parser parses the string and return it as a raw result value. For example, if you want to parse a string "apple", use *string* function as follows:
 
@@ -44,7 +44,7 @@ Parsect has some functions that creates a parser. **string** function is one of 
 
 If the parser recieve a unexpected input string like "application", the parser would consume no charactors and fail. The both two words have first four letter "appl" but the parser don't throw a exception and parsing would continue to search other matchings. 
 
-### *regexp* function
+### *regexp* constructor
 
 **regexp** function creates a parser that parses a string represented by regular expressions. *regexp* function takes a RegExp object. For example, the folllowing parser accepts any numerical string:
 
@@ -199,7 +199,7 @@ Here is a sample of four arithmetic operations calculator. (To keep it simple, a
 
 ## License
 
-Parsect is licensed under MIT License.
+Parsect is licensed under the MIT License.
 
     The MIT License
     

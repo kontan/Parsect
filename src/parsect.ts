@@ -43,19 +43,18 @@ module Parsect{
     export class State<T> { 
         /// private constructor
         /// You should use success or fail functions instead of the constructor.
-        constructor(public source: Source, public success: boolean, public value?: T, public errorMesssage?: string){
+        constructor(public source: Source, public success: boolean, public value?: T, public expected?: string){
         }
 
         equals(st:State<T>): boolean {
             return st &&
                    this.source.equals(st.source)     && 
                    this.success       === st.success &&
-                   (this.success ? jsonEq(this.value, st.value) : this.errorMesssage === st.errorMesssage);
+                   (this.success ? jsonEq(this.value, st.value) : this.expected === st.expected);
         }
     }
 
     // create new successful state.
-
     export function success<T>(source:Source, value:T): State<T>;
     export function success<T>(source:string, value:T): State<T>;        
     export function success<T>(source:any,    value:T): State<T> {
@@ -64,11 +63,11 @@ module Parsect{
     }
 
     // create new failure state
-    export function failure<T>(source:string, errorMesssage?:string): State<T> ;
-    export function failure<T>(source:Source, errorMesssage?:string): State<T> ;
-    export function failure<T>(source:any   , errorMesssage?:string): State<T> {
+    export function failure<T>(source:string, expected?:string): State<T> ;
+    export function failure<T>(source:Source, expected?:string): State<T> ;
+    export function failure<T>(source:any   , expected?:string): State<T> {
         source = typeof source === "string" ? new Source(source, 0) : source;
-        return new State<any>(source, false, undefined, errorMesssage);
+        return new State<any>(source, false, undefined, expected);
     }
 
     /// parser object
@@ -170,7 +169,7 @@ module Parsect{
     export function satisfy(condition: (charactor: string, code: number)=>boolean): Parser<string> {
         assert(condition instanceof Function);
         function expectedChars(){
-            var cs = [];
+            var cs: string[] = [];
             for(var i = 32; i <= 126; i++){
                 var c = String.fromCharCode(i);
                 if(condition(c, i)){
@@ -407,7 +406,7 @@ module Parsect{
                 }
                 sts.push(st);
             }
-            return failure(source, "one of " + sts.map(st=>st.errorMesssage).join(','));
+            return failure(source, "one of " + sts.map(st=>st.expected).join(','));
         }
         return new Parser(orParser);
     }
@@ -436,7 +435,7 @@ module Parsect{
         assert(p instanceof Parser);
         function tryingParser(source: Source): State<T> {
             var st = parse(p, source);
-            return st.success ? st : failure(source, st.errorMesssage);
+            return st.success ? st : failure(source, st.expected);
         }
         return new Parser<T>(tryingParser);
     }
@@ -473,7 +472,7 @@ module Parsect{
 
     export function lazy<T>(f: ()=>Parser<T>): Parser<T> {
         assert(f instanceof Function);
-        function lazyParser(source){
+        function lazyParser(source: Source){
             return parse(f(), source);
         }
         return new Parser(lazyParser);
@@ -544,7 +543,7 @@ module Parsect{
             return a === b;
         }else if(a instanceof Array || b instanceof Array){
             var xs: Array = <any> a, ys: Array = <any> b;
-            return xs instanceof Array && ys instanceof Array && xs.every((x,i) => jsonEq(ys[i], x));
+            return xs instanceof Array && ys instanceof Array && xs.every((x: any, i: number) => jsonEq(ys[i], x));
         }else{
             var f = true;
             for(var x in a){
@@ -558,11 +557,11 @@ module Parsect{
     }
 
     export module Join {
-        export var many:   (p: Parser<string>                                         ) => Parser<string> = p            => map(x=>x.join(''), many(p));
-        export var many1:  (p: Parser<string>                                         ) => Parser<string> = p            => map(x=>x.join(''), many1(p));
-        export var sepBy1: (p: Parser<string>, q: Parser<string>                      ) => Parser<string> = (p, q      ) => map(x=>x.join(''), sepBy1(p, q));
-        export var sepByN: (m: number, n: number, p: Parser<string>, q: Parser<string>) => Parser<string> = (m, n, p, q) => map(x=>x.join(''), sepByN(m, n, p, q));
-        export var repeat: (m: number, n: number, p: Parser<string>                   ) => Parser<string> = (m, n, p   ) => map(x=>x.join(''), repeat(m, n, p));
+        export function many  (p: Parser<string>                                         ): Parser<string> { return map(x=>x.join(''), Parsect.many(p)); }
+        export function many1 (p: Parser<string>                                         ): Parser<string> { return map(x=>x.join(''), Parsect.many1(p)); }
+        export function sepBy1(p: Parser<string>, q: Parser<string>                      ): Parser<string> { return map(x=>x.join(''), Parsect.sepBy1(p, q)); }
+        export function sepByN(m: number, n: number, p: Parser<string>, q: Parser<string>): Parser<string> { return map(x=>x.join(''), Parsect.sepByN(m, n, p, q)); }
+        export function repeat(m: number, n: number, p: Parser<string>                   ): Parser<string> { return map(x=>x.join(''), Parsect.repeat(m, n, p)); }
     }
 }
 

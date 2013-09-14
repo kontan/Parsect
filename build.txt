@@ -1,4 +1,4 @@
---target ES5
+--target ES5 --noImplicitAny
 src/parsect.ts
 test/test.ts
 test/mail.ts
