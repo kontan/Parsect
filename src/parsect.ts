@@ -45,8 +45,13 @@ interface RegExp {
 }
 
 interface Function {
-    parse: (source: Parsect.Source)=>Parsect.State<string>;
+    parse: (source: Parsect.Source)=>Parsect.State<any>;
 }
+
+// Bug?
+//interface Array {
+//    parse: (source: Parsect.Source)=>Parsect.State<any>;
+//}
 
 module Parsect{
 
@@ -60,12 +65,24 @@ module Parsect{
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     
     export class Source { 
-        constructor(public source: string, public position: number = 0){    
+        constructor(public source: string, public position: number = 0, private _path: string[] = []){    
             // _position == _source.length + 1 at the maximum because of eof.
             if(position < 0 || position > source.length + 1) throw "_position: out of range: " + position;
+            Object.defineProperty(this, "path", { get: ()=> this._path.join(' > ') });
         }
-        step(count: number): Source {
-            return new Source(this.source, this.position + count);
+        path: string;
+        seek(count: number): Source {
+            return new Source(this.source, this.position + count, this._path);
+        }
+        push(tag: string): Source {
+            var _path_ = this._path.slice(0);
+            _path_.push(tag);
+            return new Source(this.source, this.position, _path_);
+        }
+        pop(): Source {
+            var _path_ = this._path.slice(0);
+            _path_.shift();
+            return new Source(this.source, this.position, _path_);
         }
         equals(src: Source): boolean {
             return src && this.source === src.source && this.position === src.position;
@@ -75,7 +92,7 @@ module Parsect{
     export class State<T> { 
         /// private constructor
         /// You should use success or fail functions instead of the constructor.
-        constructor(public source: Source, public success: boolean, public value?: T, public expected?: string){
+        constructor(public source: Source, public success: boolean, public value?: T, public expected?: string, public failurePath?: string){
         }
 
         equals(st:State<T>): boolean {
@@ -99,7 +116,7 @@ module Parsect{
     export function failure<T>(source:Source, expected?:string): State<T> ;
     export function failure<T>(source:any   , expected?:string): State<T> {
         source = typeof source === "string" ? new Source(source, 0) : source;
-        return new State<any>(source, false, undefined, expected);
+        return new State<any>(source, false, undefined, expected, source.path);
     }
 
     /// parser object
@@ -133,12 +150,14 @@ module Parsect{
     function asParser(pattern: Parser<string>    ): Parser<string> ;
     function asParser(pattern: string            ): Parser<string> ;
     function asParser(pattern: RegExp            ): Parser<string> ;
-    function asParser(pattern: ()=>Parser<string>): Parser<string> ;
-    function asParser(pattern: any               ): Parser<string> {
+    function asParser<T>(pattern: ()=>Parser<T>  ): Parser<T> ;
+    function asParser<T>(pattern: Parser<T>[]    ): Parser<T[]   > ;
+    function asParser(pattern: any               ): Parser<any   > {
              if(pattern instanceof Parser  ) return pattern;
         else if(pattern instanceof String  ) return string(pattern);
         else if(pattern instanceof RegExp  ) return regexp(pattern);
         else if(typeof pattern === "string") return string(pattern);
+        else if(pattern instanceof Array   ) return array(pattern);
         else if(pattern instanceof Function) return pattern;    // *HACK* 
         else throw new Error();
     }
@@ -173,7 +192,7 @@ module Parsect{
     export function string(text: string): Parser<string> {
         assert(typeof text === "string" || <String>text instanceof String)
         function stringParser(s: Source): State<string> {
-            return s.source.indexOf(text, s.position) === s.position ? success(s.step(text.length), text) : failure(s, "\"" + text + "\"");
+            return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser<string>(stringParser);
     }
@@ -189,7 +208,7 @@ module Parsect{
             //  "input.indexOf(matches[0]) == 0" is needed.
             if(ms && ms.index == 0 && ms.length > 0){
                 var m = ms[0];
-                return input.indexOf(ms[0]) == 0 ? success(s.step(m.length), m) : failure(s, "/" + pattern + "/");
+                return input.indexOf(ms[0]) == 0 ? success(s.seek(m.length), m) : failure(s, "/" + pattern + "/");
             }else{
                 return failure(s, "" + pattern);
             }
@@ -214,7 +233,7 @@ module Parsect{
             var c = s.source[s.position];
             var i = s.source.charCodeAt(s.position);
             if(condition(c, i)){
-                return success(s.step(1), c);
+                return success(s.seek(1), c);
             }else{
                 var cs = expectedChars();
                 return failure(s, (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"");
@@ -539,7 +558,7 @@ module Parsect{
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Primitives
-    export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? success(source.step(1), undefined) : failure(source, undefined));
+    export var eof:      Parser<void> = new Parser((source:Source)=>source.position === source.source.length ? success(source.seek(1), undefined) : failure(source, undefined));
     export var empty:    Parser<void> = new Parser((source:Source)=>success(source, undefined));
 
     // Charactors
@@ -557,10 +576,21 @@ module Parsect{
     // Util ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////
 
-    export function breakPoint(succ: boolean = true): Parser<any> {
-        return new Parser(function(source: Source){
+    export var fail: Parser<any> = new Parser<any>((source: Source)=>failure(source, undefined));
+
+    export function tag<T>(name: string, parser: Parser<T>): Parser<T> {
+        parser = asParser(parser);
+        return new Parser((source: Source)=>{
+            var result = parse(parser, source.push(name));
+            return result.success ? success(result.source.pop(), result.value) : result;
+        });
+    }    
+
+    export function breakPoint<T>(parser: Parser<T>): Parser<T> {
+        parser = asParser(parser);
+        return new Parser((source: Source)=>{
             debugger;
-            return succ ? success(source, undefined) : failure(source, "break point");
+            return parse(parser, source);
         });
     }
 

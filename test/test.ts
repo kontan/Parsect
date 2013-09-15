@@ -21,7 +21,7 @@ module Tests {
     test("Source object invariance test", function() {
         var src:p.Source = new p.Source("hoge");
         ok(src.equals(new p.Source("hoge", 0)));
-        Parsect.success(src.step(2), "2");
+        Parsect.success(src.seek(2), "2");
         ok(src.equals(new p.Source("hoge", 0)));    
         Parsect.failure(src, "fail");
         ok(src.equals(new p.Source("hoge", 0)));
@@ -405,6 +405,19 @@ module Tests {
         ok(result2.equals(expected2));
     });
 
+    test("tag 1", ()=>{
+        var bottom = p.tag("bottom", p.fail);
+        var layer1 = p.tag("layer1", p.between("[", bottom, "]"));
+        var layer2 = p.tag("layer2", p.or("123", layer1, "567"));
+        var parser = p.tag("top", p.series("(", layer2, ")"));
+        
+        var source = "([xyz])";
+        var expected = Parsect.failure(new p.Source(source, 2), undefined);
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+        ok(result.failurePath === "top > layer2 > layer1 > bottom");
+    });
+
     test("seq parser json ast", function() {
         var identifier = p.regexp(/[A-z]+/);
 
@@ -465,10 +478,10 @@ module Tests {
         	o.scheme = s(/[a-z]+/);
         	s('://');
         	o.host = s(p.sepBy1(/[a-z]+/, '.'));
-        	o.port = s(p.optional(p.tail(p.string(':'), p.regexp(/\d+/))));
+        	o.port = s(p.optional(p.tail(':', /\d+/)));
         	s('/');
         	o.path = s(p.sepBy(/[^\/?]+/, '/'));
-        	o.params = s(p.optional(p.tail(p.string("?"), p.sepBy(param,"&"))));
+        	o.params = s(p.optional(p.tail("?", p.sepBy(param,"&"))));
         });
         var source = 'http://www.nicovideo.jp/watch/1356674833?via=thumb_watch';
         var result = p.parse(parser, source);

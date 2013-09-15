@@ -32,6 +32,10 @@
 // THE SOFTWARE.
 //
 'use strict';
+// Bug?
+//interface Array {
+//    parse: (source: Parsect.Source)=>Parsect.State<any>;
+//}
 var Parsect;
 (function (Parsect) {
     // assert argument conditions.
@@ -44,15 +48,31 @@ var Parsect;
     // Data Type Definitions ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     var Source = (function () {
-        function Source(source, position) {
+        function Source(source, position, _path) {
             if (typeof position === "undefined") { position = 0; }
+            if (typeof _path === "undefined") { _path = []; }
+            var _this = this;
             this.source = source;
             this.position = position;
+            this._path = _path;
             if (position < 0 || position > source.length + 1)
                 throw "_position: out of range: " + position;
+            Object.defineProperty(this, "path", { get: function () {
+                    return _this._path.join(' > ');
+                } });
         }
-        Source.prototype.step = function (count) {
-            return new Source(this.source, this.position + count);
+        Source.prototype.seek = function (count) {
+            return new Source(this.source, this.position + count, this._path);
+        };
+        Source.prototype.push = function (tag) {
+            var _path_ = this._path.slice(0);
+            _path_.push(tag);
+            return new Source(this.source, this.position, _path_);
+        };
+        Source.prototype.pop = function () {
+            var _path_ = this._path.slice(0);
+            _path_.shift();
+            return new Source(this.source, this.position, _path_);
         };
         Source.prototype.equals = function (src) {
             return src && this.source === src.source && this.position === src.position;
@@ -64,11 +84,12 @@ var Parsect;
     var State = (function () {
         /// private constructor
         /// You should use success or fail functions instead of the constructor.
-        function State(source, success, value, expected) {
+        function State(source, success, value, expected, failurePath) {
             this.source = source;
             this.success = success;
             this.value = value;
             this.expected = expected;
+            this.failurePath = failurePath;
         }
         State.prototype.equals = function (st) {
             return st && this.source.equals(st.source) && this.success === st.success && (this.success ? jsonEq(this.value, st.value) : this.expected === st.expected);
@@ -85,7 +106,7 @@ var Parsect;
 
     function failure(source, expected) {
         source = typeof source === "string" ? new Source(source, 0) : source;
-        return new State(source, false, undefined, expected);
+        return new State(source, false, undefined, expected, source.path);
     }
     Parsect.failure = failure;
 
@@ -126,6 +147,8 @@ else if (pattern instanceof RegExp)
             return regexp(pattern);
 else if (typeof pattern === "string")
             return string(pattern);
+else if (pattern instanceof Array)
+            return array(pattern);
 else if (pattern instanceof Function)
             return pattern;
 else
@@ -139,7 +162,7 @@ else
     function string(text) {
         assert(typeof text === "string" || text instanceof String);
         function stringParser(s) {
-            return s.source.indexOf(text, s.position) === s.position ? success(s.step(text.length), text) : failure(s, "\"" + text + "\"");
+            return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser(stringParser);
     }
@@ -155,7 +178,7 @@ else
 
             if (ms && ms.index == 0 && ms.length > 0) {
                 var m = ms[0];
-                return input.indexOf(ms[0]) == 0 ? success(s.step(m.length), m) : failure(s, "/" + pattern + "/");
+                return input.indexOf(ms[0]) == 0 ? success(s.seek(m.length), m) : failure(s, "/" + pattern + "/");
             } else {
                 return failure(s, "" + pattern);
             }
@@ -181,7 +204,7 @@ else
             var c = s.source[s.position];
             var i = s.source.charCodeAt(s.position);
             if (condition(c, i)) {
-                return success(s.step(1), c);
+                return success(s.seek(1), c);
             } else {
                 var cs = expectedChars();
                 return failure(s, (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"");
@@ -541,7 +564,7 @@ else
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Primitives
     Parsect.eof = new Parser(function (source) {
-        return source.position === source.source.length ? success(source.step(1), undefined) : failure(source, undefined);
+        return source.position === source.source.length ? success(source.seek(1), undefined) : failure(source, undefined);
     });
     Parsect.empty = new Parser(function (source) {
         return success(source, undefined);
@@ -561,11 +584,24 @@ else
     ////////////////////////////////////////////////////////////////////
     // Util ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////
-    function breakPoint(succ) {
-        if (typeof succ === "undefined") { succ = true; }
+    Parsect.fail = new Parser(function (source) {
+        return failure(source, undefined);
+    });
+
+    function tag(name, parser) {
+        parser = asParser(parser);
+        return new Parser(function (source) {
+            var result = parse(parser, source.push(name));
+            return result.success ? success(result.source.pop(), result.value) : result;
+        });
+    }
+    Parsect.tag = tag;
+
+    function breakPoint(parser) {
+        parser = asParser(parser);
         return new Parser(function (source) {
             debugger;
-            return succ ? success(source, undefined) : failure(source, "break point");
+            return parse(parser, source);
         });
     }
     Parsect.breakPoint = breakPoint;
