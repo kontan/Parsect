@@ -292,7 +292,7 @@ module Tests {
     });
 
     test("pure 1", ()=>{
-        var parser = p.pure(()=>"x");         
+        var parser = p.pure("x");         
         var source = "abc";
         var expected = p.success(new p.State(source, 0), "x");
         var result = p.parse(parser, source);
@@ -466,24 +466,15 @@ module Tests {
 
         var reservedOp = tokenParser.reservedOp;
 
-        function binary<U,A>(name: string, fun: (a: A, b: A)=>A, assoc: p.Assoc): p.Operator<U,A> {
-            return p.infix(p.tail(reservedOp(name), p.pure(()=>fun)), assoc);
+        function binary<A>(name: string, fun: (a: A, b: A)=>A, assoc: p.Assoc): p.Operator<A> {
+            return p.infix(p.tail(reservedOp(name), p.pure(fun)), assoc);
         }
-        function prefix<U,A>(name: string, fun: (a: A)=>A): p.Operator<U,A> {
-            return p.prefix(p.tail(reservedOp(name), p.pure(()=>fun)));
+        function prefix<A>(name: string, fun: (a: A)=>A): p.Operator<A> {
+            return p.prefix(p.tail(reservedOp(name), p.pure(fun)));
         }
-        function postfix<U,A>(name: string, fun: (a: A)=>A): p.Operator<U,A> {
-            return p.postfix(p.tail(reservedOp(name), p.pure(()=>fun)));
+        function postfix<A>(name: string, fun: (a: A)=>A): p.Operator<A> {
+            return p.postfix(p.tail(reservedOp(name), p.pure(fun)));
         }
-        var table: p.Operator<void,number>[][] = [
-            [prefix("-", x=>-x), prefix("+", x=>x)], 
-            [postfix("++", x=>x+1)], 
-            [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
-            [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
-        ];
-        var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
-        var expr = p.buildExpressionParser(table, term);
-        var parser = expr;
 
         test("token parser: float", ()=>{
             var source = "42";
@@ -510,7 +501,7 @@ module Tests {
         });
 
         test("operator table 1", ()=>{
-            var table: p.Operator<void,number>[][] = [
+            var table: p.Operator<number>[][] = [
                 [binary("*", (x,y)=>x*y, p.Assoc.Left)], 
             ];
             var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
@@ -524,7 +515,7 @@ module Tests {
         });
 
         test("operator table 2", ()=>{
-            var table: p.Operator<void,number>[][] = [
+            var table: p.Operator<number>[][] = [
                 [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
@@ -539,7 +530,7 @@ module Tests {
         });
 
         test("operator table 3", ()=>{
-            var table: p.Operator<void,number>[][] = [
+            var table: p.Operator<number>[][] = [
                 [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
@@ -554,7 +545,7 @@ module Tests {
         });
 
         test("operator table 4", ()=>{
-            var table: p.Operator<void,number>[][] = [
+            var table: p.Operator<number>[][] = [
                 [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
@@ -564,6 +555,20 @@ module Tests {
             var source = "(1  +3)*  5";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 11), 20);
+            var result = p.parse(expr, input);
+            ok(result.equals(expected));
+        });
+
+        test("operator table 4", ()=>{
+            var table: p.Operator<number>[][] = [
+                [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
+            ];
+            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var expr = p.buildExpressionParser(table, term);
+
+            var source = "7 - 3";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, source.length), eval(source));
             var result = p.parse(expr, input);
             ok(result.equals(expected));
         });

@@ -314,11 +314,14 @@ else
         assert(f instanceof Function);
         function seqParser(source) {
             var st = success(source, undefined);
+            var lastValue = undefined;
             var context = (function (a) {
                 if (st.success) {
-                    if (a instanceof Function)
-                        a = pure(a);
-                    st = parse(a, st.state);
+                    var _a = a instanceof Function ? map(function () {
+                        return a();
+                    }, Parsect.empty) : a;
+                    st = parse(_a, st.state);
+                    lastValue = st.value;
                     return st.value;
                 }
             });
@@ -341,7 +344,7 @@ else
                 } });
             context.out = {};
             var returnValue = f(context, context.out);
-            var value = typeof returnValue === "undefined" ? context.out : returnValue;
+            var value = typeof returnValue !== "undefined" ? returnValue : context.out;
             return context.success ? (value !== undefined ? success(st.state, value) : st) : st;
         }
         return new Parser(seqParser);
@@ -417,9 +420,7 @@ else
 
     // Optional parser constructors ///////////////////////////////////////////////////////////////////////////////////////////
     function option(defaultValue, p) {
-        return or(p, pure(function () {
-            return defaultValue;
-        }));
+        return or(p, pure(defaultValue));
     }
     Parsect.option = option;
 
@@ -430,12 +431,9 @@ else
     Parsect.optional = optional;
 
     // Special parser constructors /////////////////////////////////////////////////////////////////////////////////////////////
-    // pure:(f:()=>T):Parser<T>
-    // pure function injects a arbitrary value.
-    // pure consumes no input.
-    function pure(f) {
+    function pure(t) {
         return map(function () {
-            return f();
+            return t;
         }, Parsect.empty);
     }
     Parsect.pure = pure;
@@ -534,9 +532,13 @@ else
         return success(source, undefined);
     });
     Parsect.number = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
-    Parsect.fail = new Parser(function (source) {
-        return failure(source, undefined);
-    });
+
+    function fail(message) {
+        return new Parser(function (source) {
+            return failure(source, message);
+        });
+    }
+    Parsect.fail = fail;
 
     function tag(name, parser) {
         parser = asParser(parser);
@@ -910,53 +912,152 @@ else
     })(Parsect.Assoc || (Parsect.Assoc = {}));
     var Assoc = Parsect.Assoc;
 
+    var LAssoc = (function () {
+        function LAssoc(p) {
+            this.p = p;
+        }
+        return LAssoc;
+    })();
+    var RAssoc = (function () {
+        function RAssoc(p) {
+            this.p = p;
+        }
+        return RAssoc;
+    })();
+    var NAssoc = (function () {
+        function NAssoc(p) {
+            this.p = p;
+        }
+        return NAssoc;
+    })();
+    var Prefix = (function () {
+        function Prefix(p) {
+            this.p = p;
+        }
+        return Prefix;
+    })();
+    var Postfix = (function () {
+        function Postfix(p) {
+            this.p = p;
+        }
+        return Postfix;
+    })();
+
     function infix(p, assoc) {
-        return function (term) {
-            var expr = seq(function (s) {
-                var lhs = s(term);
-                return s(option(lhs, triable(seq(function (s) {
-                    var o = s(p);
-                    var rhs = s(term);
-                    return s.success ? o(lhs, rhs) : undefined;
-                }))));
-            });
-            return expr;
-        };
+        switch (assoc) {
+            case Assoc.None:
+                return new NAssoc(p);
+            case Assoc.Left:
+                return new LAssoc(p);
+            case Assoc.Right:
+                return new RAssoc(p);
+        }
     }
     Parsect.infix = infix;
-
     function prefix(p) {
-        return function (term) {
-            return seq(function (s) {
-                var lhs = s(term);
-                var o = s(p);
-                return o ? o(lhs) : undefined;
-            });
-        };
+        return new Prefix(p);
     }
     Parsect.prefix = prefix;
-
     function postfix(p) {
-        return function (term) {
-            return seq(function (s) {
-                var o = s(p);
-                var rhs = s(term);
-                return o ? o(rhs) : undefined;
-            });
-        };
+        return new Postfix(p);
     }
     Parsect.postfix = postfix;
 
-    function buildExpressionParser(operatorTable, p) {
-        var layers = new Array(operatorTable.length + 1);
-        layers[0] = p;
-        for (var i = 0; i < operatorTable.length; i++) {
-            var ops = operatorTable[i];
-            layers[i + 1] = choice(ops.map(function (op) {
-                return op(layers[i]);
+    function buildExpressionParser(operatorTable, simpleExpr) {
+        return operatorTable.reduce(function (term, ops) {
+            var rassoc = ops.filter(function (op) {
+                return op instanceof RAssoc;
+            });
+            var lassoc = ops.filter(function (op) {
+                return op instanceof LAssoc;
+            });
+            var nassoc = ops.filter(function (op) {
+                return op instanceof NAssoc;
+            });
+            var prefix = ops.filter(function (op) {
+                return op instanceof Prefix;
+            });
+            var postfix = ops.filter(function (op) {
+                return op instanceof Postfix;
+            });
+
+            var rassocOp = choice(rassoc.map(function (r) {
+                return r.p;
             }));
-        }
-        return layers[layers.length - 1];
+            var lassocOp = choice(lassoc.map(function (r) {
+                return r.p;
+            }));
+            var nassocOp = choice(nassoc.map(function (r) {
+                return r.p;
+            }));
+            var prefixOp = choice(prefix.map(function (r) {
+                return r.p;
+            }));
+            var postfixOp = choice(postfix.map(function (r) {
+                return r.p;
+            }));
+
+            function ambigious(assoc, op) {
+                return triable(tail(op, fail("ambiguous use of a " + assoc + " associative operator")));
+            }
+
+            var ambigiousRight = ambigious("right", rassocOp);
+            var ambigiousLeft = ambigious("left", lassocOp);
+            var ambigiousNon = ambigious("non", nassocOp);
+
+            var termP = seq(function (s) {
+                var pre = s(prefixP);
+                var x = s(term);
+                var post = s(postfixP);
+                return s.success ? post(pre(x)) : undefined;
+            });
+
+            var postfixP = or(postfixOp, pure(function (x) {
+                return x;
+            }));
+            var prefixP = or(prefixOp, pure(function (x) {
+                return x;
+            }));
+            function rassocP(x) {
+                return or(seq(function (s) {
+                    var f = s(rassocOp);
+                    var y = s(seq(function (s) {
+                        var z = s(termP);
+                        return rassocP1(z);
+                    }));
+                    return s.success ? f(x, y) : undefined;
+                }), ambigiousLeft, ambigiousNon);
+            }
+
+            function rassocP1(x) {
+                return or(rassocP(x), pure(x));
+            }
+
+            function lassocP(x) {
+                return or(seq(function (s) {
+                    var f = s(lassocOp);
+                    var y = s(termP);
+                    return s.success ? s(lassocP1(f(x, y))) : undefined;
+                }), ambigiousRight, ambigiousNon);
+            }
+
+            function lassocP1(x) {
+                return or(lassocP(x), pure(x));
+            }
+
+            function nassocP(x) {
+                return seq(function (s) {
+                    var f = s(nassocOp);
+                    var y = s(termP);
+                    return s.success ? s(or(ambigiousRight, ambigiousLeft, ambigiousNon, pure(f(x, y)))) : undefined;
+                });
+            }
+
+            return seq(function (s) {
+                var x = s(termP);
+                return s(or(rassocP(x), lassocP(x), nassocP(x), pure(x)));
+            });
+        }, simpleExpr);
     }
     Parsect.buildExpressionParser = buildExpressionParser;
 

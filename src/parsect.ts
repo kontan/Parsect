@@ -300,10 +300,12 @@ module Parsect {
         assert(f instanceof Function);
         function seqParser<U>(source: State<U>): Reply<T,U> {
             var st:Reply<T,U> = success(source, undefined);
+            var lastValue: T = undefined;
             var context:Context<T,U> = <Context<T,U>> ((a: any)=>{
                 if(st.success){
-                    if(a instanceof Function) a = pure(a);
-                    st = parse(a, st.state);
+                    var _a = a instanceof Function ? map(()=>a(), empty) : a;
+                    st = parse(_a, st.state);
+                    lastValue = st.value;
                     return st.value; 
                 }
             });
@@ -316,7 +318,7 @@ module Parsect {
             Object.defineProperty(context, "value",     { get: ()=> st.value });
             context.out = <T> {};
             var returnValue: any = f(context, context.out);
-            var value = typeof returnValue === "undefined" ? context.out : returnValue;
+            var value = typeof returnValue !== "undefined" ? returnValue : context.out;
             return context.success ? (value !== undefined ? success(st.state, value) : st) : st;
         }
         return new Parser<T>(seqParser);
@@ -389,7 +391,7 @@ module Parsect {
     // Optional parser constructors ///////////////////////////////////////////////////////////////////////////////////////////
 
     export function option<T>(defaultValue: T, p: Parser<T>): Parser<T> {
-        return or(p, pure(()=>defaultValue));
+        return or(p, pure(defaultValue));
     }
 
     // optional:(p:Parser<T>):Parser<T>
@@ -399,11 +401,8 @@ module Parsect {
 
     // Special parser constructors /////////////////////////////////////////////////////////////////////////////////////////////
 
-    // pure:(f:()=>T):Parser<T>
-    // pure function injects a arbitrary value. 
-    // pure consumes no input. 
-    export function pure<T>(f: ()=>T): Parser<T>{
-        return map(()=>f(), empty);
+    export function pure<T>(t: T): Parser<T>{
+        return map(()=>t, empty);
     }
 
     export function triable<T>(p: Parser<T>): Parser<T> {
@@ -491,7 +490,10 @@ module Parsect {
     export var eof:      Parser<void> = new Parser((source:State<any>)=>source.position === source.source.length ? success(source.seek(1), undefined) : failure(source, undefined));
     export var empty:    Parser<void> = new Parser((source:State<any>)=>success(source, undefined));
     export var number:   Parser<number> = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
-    export var fail: Parser<any> = new Parser<any>((source: State<any>)=>failure(source, undefined));
+    
+    export function fail(message: string): Parser<any> {
+        return new Parser<any>((source: State<any>)=>failure(source, message));
+    }
 
     export function tag<T>(name: string, parser: Parser<T>): Parser<T> {
         parser = asParser(parser);
@@ -888,58 +890,127 @@ module Parsect {
         Right
     }
 
-    export interface Operator<U,A>{
-        (term: Parser<A>): Parser<A>; 
+    export interface Operator<A>{
+        //(term: Parser<A>): Parser<A>; 
     }
 
-    export function infix<U,A>(p: Parser<(l: A, r: A) => A>, assoc: Assoc): Operator<U,A> {
-        return function(term: Parser<A>){
-            var expr = seq(s=>{
-                var lhs = s(term);
-                return s(option(lhs, triable(seq(s=>{
-                    var o   = s(p);
-                    var rhs = s(term);
-                    return s.success ? o(lhs, rhs) : undefined;  
-                }))));
-            });
-            return expr;
-        };
-    }
-
-    export function prefix<U,A>(p: Parser<(a: A) => A>): Operator<U,A> {
-        return function(term: Parser<A>){
-            return seq(s=>{
-                var lhs = s(term);
-                var o   = s(p);
-                return o ? o(lhs) : undefined;
-            });
-        };
-    }
-
-    export function postfix<U,A>(p: Parser<(a: A) => A>): Operator<U,A> {
-        return function(term: Parser<A>){
-            return seq(s=>{
-                var o   = s(p);
-                var rhs = s(term);
-                return o ? o(rhs) : undefined;
-            });
-        };
-    }
-
-    export function buildExpressionParser<U,A>(operatorTable: Operator<U,A>[][], p: Parser<A>): Parser<A> {
-        var layers = new Array<Parser<A>>(operatorTable.length + 1);
-        layers[0] = p;        
-        for(var i = 0; i < operatorTable.length; i++){
-            var ops = operatorTable[i];
-            layers[i + 1] = choice(ops.map((op: Operator<U,A>)=>op(layers[i])));
+    class LAssoc<A> {
+        constructor(public p: Parser<(l: A, r: A) => A>) {
         }
-        return layers[layers.length - 1];
+    }
+    class RAssoc<A> {
+        constructor(public p: Parser<(l: A, r: A) => A>) {
+        }
+    }    
+    class NAssoc<A> {
+        constructor(public p: Parser<(l: A, r: A) => A>) {
+        }
+    }
+    class Prefix<A> {
+        constructor(public p: Parser<(a: A) => A>){
+        }
+    }
+    class Postfix<A> {
+        constructor(public p: Parser<(a: A) => A>){
+        }
     }
 
+    export function infix<A>(p: Parser<(l: A, r: A) => A>, assoc: Assoc): Operator<A> {
+        switch(assoc){
+            case Assoc.None:  return new NAssoc(p);
+            case Assoc.Left:  return new LAssoc(p);
+            case Assoc.Right: return new RAssoc(p);
+        }
+    }
+    export function prefix<A>(p: Parser<(a: A) => A>): Operator<A> {
+        return new Prefix(p);
+    }
+    export function postfix<A>(p: Parser<(a: A) => A>): Operator<A> {
+        return new Postfix(p);
+    }
 
+    export function buildExpressionParser<A>(operatorTable: Operator<A>[][], simpleExpr: Parser<A>): Parser<A> {
+        return operatorTable.reduce((term: Parser<A>, ops: Operator<A>[])=>{
+            var rassoc:  RAssoc <A>[] = <RAssoc <A>[]> ops.filter(op => op instanceof RAssoc );
+            var lassoc:  LAssoc <A>[] = <LAssoc <A>[]> ops.filter(op => op instanceof LAssoc );
+            var nassoc:  NAssoc <A>[] = <NAssoc <A>[]> ops.filter(op => op instanceof NAssoc );
+            var prefix:  Prefix <A>[] = <Prefix <A>[]> ops.filter(op => op instanceof Prefix );
+            var postfix: Postfix<A>[] = <Postfix<A>[]> ops.filter(op => op instanceof Postfix);
+            
+            var rassocOp  = choice(rassoc .map(r=>r.p))
+            var lassocOp  = choice(lassoc .map(r=>r.p));
+            var nassocOp  = choice(nassoc .map(r=>r.p));
+            var prefixOp  = choice(prefix .map(r=>r.p));
+            var postfixOp = choice(postfix.map(r=>r.p));
 
+            function ambigious(assoc: string, op: any){
+                return triable(tail(op, fail("ambiguous use of a " + assoc + " associative operator")));
+            }
 
+            var ambigiousRight    = ambigious("right", rassocOp);
+            var ambigiousLeft     = ambigious("left", lassocOp);
+            var ambigiousNon      = ambigious("non", nassocOp);
 
+            var termP = seq(s=>{
+                var pre = s(prefixP);
+                var x = s(term);
+                var post = s(postfixP);
+                return s.success ? post(pre(x)) : undefined;
+            });
+
+            var postfixP = or(postfixOp, pure((x: A)=>x));
+            var prefixP = or(prefixOp, pure((x: A)=>x));
+            function rassocP(x: A){
+                return or(
+                    seq(s=>{
+                        var f: (a: A, b: A)=>A = s(rassocOp);
+                        var y: A = s(seq(s=>{ var z = s(termP); return rassocP1(z); }));
+                        return s.success ? f(x, y) : undefined;
+                    }),
+                    ambigiousLeft,
+                    ambigiousNon
+                );
+            }
+
+            function rassocP1(x: A){
+                return or(rassocP(x), pure(x));
+            }
+
+            function lassocP(x: A){
+                return or(
+                    seq(s=>{
+                        var f = s(lassocOp);
+                        var  y = s(termP);
+                        return s.success ? s(lassocP1(f(x, y))) : undefined;
+                    }),
+                    ambigiousRight,
+                    ambigiousNon
+                );
+            }
+
+            function lassocP1(x: A){
+                return or(lassocP(x), pure(x));
+            }
+
+            function nassocP(x: A){
+                return seq(s=>{
+                    var f = s(nassocOp);
+                    var y = s(termP);
+                    return s.success ? s(or(
+                        ambigiousRight,
+                        ambigiousLeft,
+                        ambigiousNon,
+                        pure(f(x, y))
+                    )) : undefined;
+                });
+            }
+
+            return seq(s=>{
+                var x = s(termP);
+                return s(or(rassocP(x), lassocP(x), nassocP(x), pure(x)))
+            });
+        }, simpleExpr);
+    }
 
 
     ////////////////////////////////////////////////////////////////////
