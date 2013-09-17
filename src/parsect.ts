@@ -42,6 +42,8 @@ module Parsect {
     
     export class State<U> { 
         constructor(public source: string, public position: number = 0, public _userState?: U, public _path: string[] = []){    
+            assert(typeof source !== "undefined");
+            assert(source !== null);
             // _position == _source.length + 1 at the maximum because of eof.
             if(position < 0 || position > source.length + 1) throw "_position: out of range: " + position;
             Object.defineProperty(this, "path", { get: ()=> this._path.join(' > ') });
@@ -50,12 +52,12 @@ module Parsect {
         seek(count: number): State {
             return new State(this.source, this.position + count, this._userState, this._path);
         }
-        push(tag: string): State {
+        pushTag(tag: string): State {
             var _path_ = this._path.slice(0);
             _path_.push(tag);
             return new State(this.source, this.position, this._userState, _path_);
         }
-        pop(): State {
+        popTag(): State {
             var _path_ = this._path.slice(0);
             _path_.shift();
             return new State(this.source, this.position, this._userState, _path_);
@@ -422,11 +424,14 @@ module Parsect {
         return new Parser(lookAheadParser);
     }    
 
-    export function notFollowedBy<T>(value: T, p: Parser<T>): Parser<T> {
+    export function notFollowedBy<T>(p: Parser<T>, q: Parser<any>): Parser<T> {
         p = asParser(p);
+        q = asParser(q);
         function notFollowedByParser<U>(source: State<U>): Reply<T,U> {
-            var st = parse(p, source);
-            return st.success ? failure(st.state, 'unexpected ' + st.value) : success(source, value);
+            var rep = parse(p, source);
+            if( ! rep.success) return rep;
+            var _rep = parse(q, rep.state); 
+            return _rep.success ? failure(_rep.state, 'unexpected ' + _rep.value) : rep;
         }
         return new Parser(notFollowedByParser);
     }
@@ -460,7 +465,23 @@ module Parsect {
     export function apply<A,B,C,D,E,F,G,H,R>(m: (a: A, b: B, c: C, d: D, e: E, f: F, g: G, h:H)=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>, pg: Parser<G>, ph: Parser<H>): Parser<R>;    
     export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
         assert(func instanceof Function);
-        return map(xs=>func.apply(undefined, xs), array(ps))
+        return map((xs: any[])=>func.apply(undefined, xs), array(ps))
+    }
+
+    export function skipMany<A>(p: Parser<A>): Parser<void> {
+        function skipManyParser<U>(state: State<U>){
+            while(true){
+                var rep = parse(p, state);
+                if( ! rep.success) break;
+                state = rep.state;
+            }
+            return success(state, undefined);
+        }
+        return new Parser(skipManyParser);
+    }
+
+    export function skipMany1<A>(p: Parser<A>): Parser<void> {
+        return tail(p, skipMany(p));
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -475,9 +496,16 @@ module Parsect {
     export function tag<T>(name: string, parser: Parser<T>): Parser<T> {
         parser = asParser(parser);
         return new Parser((source: State)=>{
-            var result = parse(parser, source.push(name));
-            return result.success ? success(result.state.pop(), result.value) : result;
+            var result = parse(parser, source.pushTag(name));
+            return result.success ? success(result.state.popTag(), result.value) : result;
         });
+    }
+
+    export function unexpected(message: string): Parser<any> {
+        function unexpectedParser<U>(state: State<U>): Reply<U,any> {
+            return failure(state, message);
+        }
+        return new Parser(unexpectedParser);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -532,10 +560,15 @@ module Parsect {
     }
 
     /// string parser
-    export function string(text: string): Parser<string> {
+    export function string(text: string, caseSensitive: boolean = true): Parser<string> {
         assert(typeof text === "string" || <String>text instanceof String)
+        text = caseSensitive ? text : text.toLowerCase(); 
         function stringParser<U>(s: State<U>): Reply<string,U> {
-            return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
+
+            var slice = s.source.slice(s.position, s.position + text.length);
+            return text === (caseSensitive ? slice : slice.toLowerCase()) ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
+
+            //return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser<string>(stringParser);
     }
@@ -581,6 +614,333 @@ module Parsect {
         assert(typeof charCode === "number" || <Number>charCode instanceof Number);
         return satisfy((_,i)=> i === charCode);
     }
+
+
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Token parser builder
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    export class LanguageDef {
+        constructor(
+            public commentStart: string,
+            public commentEnd: string,
+            public commentLine: string,
+            public nestedComments: boolean,
+            public identStart: Parser<string>,
+            public identLetter: Parser<string>,
+            public opStart: Parser <string>,
+            public opLetter: Parser<string>,
+            public reservedNames: string[],
+            public reservedOpNames: string[],
+            public caseSensitive: boolean
+        ){ } 
+    }           
+
+    export interface GenTokenParser {
+        identifier:     Parser<string>;
+        reserved:       (s: string)=>Parser<string>;
+        operator:       Parser<string>;
+        reservedOp:     (s: string)=>Parser<string>;
+        charLiteral:    Parser<string>;
+        stringLiteral:  Parser<string>
+        natural:        Parser<number>;
+        integer:        Parser<number>;
+        float:          Parser<number>;
+        naturalOrFloat: Parser<number>;
+        decimal:        Parser<number>;
+        hexadecimal:    Parser<number>;
+        octal:          Parser<number>;
+        symbol:         (s: String)=>Parser<string>;
+        lexeme:         <A>(p: Parser<A>)=>Parser<A>;
+        whiteSpace:     Parser<string>;
+        parens:         <A>(p: Parser<A>)=>Parser<A>;
+        braces:         <A>(p: Parser<A>)=>Parser<A>;
+        angles:         <A>(p: Parser<A>)=>Parser<A>;
+        brackets:       <A>(p: Parser<A>)=>Parser<A>;
+        semi:           Parser<string>;
+        comma:          Parser<string>;
+        colon:          Parser<string>;
+        dot:            Parser<string>;
+        semiSep:        <A>(p: Parser<A>)=>Parser<A[]>;
+        semiSep1:       <A>(p: Parser<A>)=>Parser<A[]>;
+        commaSep:       <A>(p: Parser<A>)=>Parser<A[]>;
+        commaSep1:      <A>(p: Parser<A>)=>Parser<A[]>;
+    }
+
+    export function makeTokenParser(def: LanguageDef): GenTokenParser {
+        /////////////////////////////////////////////////////////////////////////////////////////
+        // White space & symbols
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        function symbol(name: string): Parser<string> {
+            return lexeme(string(name));
+        }
+        function lexeme<A>(p: Parser<A>): Parser<A> {
+            return seq(s=>{
+                var x = s(p); 
+                s(whiteSpace); 
+                return x;
+            });
+        }
+
+        // whiteSpace
+        var noLine  = def.commentLine.length == 0;
+        var noMulti = def.commentStart.length == 0;
+
+        var oneLineComment = seq(s=>{
+            s(triable(string(def.commentLine)));
+            skipMany(satisfy(x=>x!='\n'));
+            return <void> undefined;
+        });
+        var multiLineComment = seq(s=>{
+            s(triable(string(def.commentStart)));
+            return s(inComment);
+        });
+        var startEnd = (def.commentEnd + def.commentStart).split('').filter((x, i, xs)=>xs.indexOf(x) === i).join("");
+        var inCommentMulti = or(
+            seq(s=>{ s(triable(string(def.commentEnd))); return <void> undefined; }),
+            seq(s=>{ s(multiLineComment);               s(inCommentMulti) }),
+            seq(s=>{ s(skipMany1(noneOf(startEnd)));    s(inCommentMulti) }),
+            seq(s=>{ s(oneOf(startEnd));                s(inCommentMulti); })
+        );
+        var inCommentSingle = or(
+            seq(s=>{
+                s(triable(string(def.commentEnd))); 
+                return <void> undefined;
+            }),
+            seq(s=>{
+                s(skipMany1(noneOf(startEnd)));
+                return s(inCommentSingle);
+            }),
+            seq(s=>{
+                s(oneOf(startEnd)); 
+                return s(inCommentSingle);
+            })
+        );
+        var inComment = def.nestedComments ? inCommentMulti : inCommentSingle;          
+        var simpleSpace = skipMany1(oneOf(" \t\r\n"));
+        var whiteSpace =
+            noLine && noMulti ? skipMany(simpleSpace) :
+            noLine            ? skipMany(or(simpleSpace, multiLineComment)) :
+            noMulti           ? skipMany(or(simpleSpace, oneLineComment)) :
+                                skipMany(or(simpleSpace, oneLineComment, multiLineComment));
+
+
+        ////////////////////////////////////////////////////////////////////////////////////
+        // Operators & reserved ops
+        ////////////////////////////////////////////////////////////////////////////////////////
+        function reservedOp(name: string){
+            return lexeme(triable(notFollowedBy(
+                string(name),
+                def.opLetter
+            )));
+        }
+
+        var operator = lexeme(triable(seq(s=>{
+            var name = s(oper);
+            return isReservedOp(name) ? s(unexpected("reserved operator " + name)) : name;
+        })));
+
+        var oper = seq(s=>{
+            var c = s(def.opStart);
+            var cs = s(Join.many(def.opLetter));
+            return c + cs;
+        });
+
+        function isReservedOp(name: string){
+            return def.reservedOpNames.indexOf(name) >= 0;
+        }
+
+        /////////////////////////////////////////////////////////////////////////
+        // Identifiers & Reserved words
+        /////////////////////////////////////////////////////////////////////////////////////////
+
+        function reserved(name: string): Parser<string> {
+            return lexeme(triable(notFollowedBy(string(name, def.caseSensitive), def.identLetter)));
+        }
+
+
+        var identifier = lexeme(triable(seq(s=>{
+            var name = s(ident);
+            if(isReservedName(name)){
+                return s(unexpected("reserved word " + name));
+            }else{
+                return name;
+            }
+        })));
+        
+        var ident = seq(s=>{
+            var c = s(def.identStart);
+            var cs = s(Join.many(def.identLetter));
+            return s(()=> c + cs);
+        });
+
+        var theReservedNames = def.caseSensitive ? def.reservedNames : def.reservedNames.map(n=>n.toLowerCase());
+
+        function isReservedName(name: string){
+            var caseName = def.caseSensitive ? name : name.toLowerCase();
+            return theReservedNames.indexOf(caseName) >= 0;
+        }
+        
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // Numbers
+        /////////////////////////////////////////////////////////////////////////////
+        var float           = lexeme(number);
+        
+        ////////////////////////////////////////////////////////////////////////////////
+        // Bracketing
+        //////////////////////////////////////////////////////////////////////////////////////
+        function parens<A>(p: Parser<A>): Parser<A> {
+            return between(symbol("("), p, symbol(")"));
+        }
+        function braces<A>(p: Parser<A>): Parser<A> {
+            return between(symbol("{"), p, symbol("}"));
+        }
+        function angles<A>(p: Parser<A>): Parser<A> {
+            return between(symbol("<"), p, symbol(">"));
+        }
+        function brackets<A>(p: Parser<A>): Parser<A> {
+            return between(symbol("["), p, symbol("]"));
+        }
+
+        var semi            = symbol(";");
+        var comma           = symbol(",");
+        var dot             = symbol(".");
+        var colon           = symbol(":");
+
+        function commaSep<A>(p: Parser<A>): Parser<A> {
+            return sepBy(p, comma);
+        }
+        function semiSep<A>(p: Parser<A>): Parser<A> {
+            return sepBy(p, semi);
+        }
+        function commaSep1<A>(p: Parser<A>): Parser<A> {
+            return sepBy1(p, comma);
+        }
+        function semiSep1<A>(p: Parser<A>): Parser<A> {
+            return sepBy1(p, semi);
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////////////
+        // Chars & Strings
+        //////////////////////////////////////////////////////////////////////////////
+
+        var escapeCode = seq(s=>{
+            var c = s(satisfy(_=>true));
+            switch(c){
+                case "r": return "\r";
+                case "n": return "\n";
+                default: return s(unexpected(c));
+            }
+        });
+
+        var charLetter = satisfy((c,i)=>(c != "'") && (c != "\\") && (i > 26));
+        var charEscape = tail(string('\\'), escapeCode);
+        var characterChar = or(charLetter, charEscape);
+        var charLiteral = lexeme(between(string('\''), characterChar, string('\'')));
+
+        var stringLiteral = lexeme(/"(\\[rn"]|[^"])"/);
+
+        return <any>{
+            identifier: identifier,
+            reserved: reserved,
+            operator: operator,
+            reservedOp: reservedOp,
+
+            charLiteral: charLiteral,
+            stringLiteral: stringLiteral,
+            //natural: natural,
+            //integer: integer,
+            float: float,
+            //naturalOrFloat: naturalOrFloat,
+            //decimal: decimal,
+            //hexadecimal: hexadecimal,
+            //octal: octal,
+
+            symbol: symbol,
+            lexeme: lexeme,
+            whiteSpace: whiteSpace,
+
+            parens: parens,
+            braces: braces,
+            angles: angles,
+            brackets: brackets,
+            squares: brackets,
+            semi: semi,
+            comma: comma,
+            colon: colon,
+            dot: dot,
+            semiSep: semiSep,
+            semiSep1: semiSep1,
+            commaSep: commaSep,
+            commaSep1: commaSep1
+        };
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Expression Parser
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    export enum Assoc {
+        None,
+        Left,
+        Right
+    }
+
+    export interface Operator<U,A>{
+        (term: Parser<A>): Parser<A>; 
+    }
+
+    export function infix<U,A>(p: Parser<(l: A, r: A) => A>, assoc: Assoc): Operator<U,A> {
+        return function(term: Parser<A>){
+            var expr = seq(s=>{
+                var lhs = s(term);
+                return s(option(lhs, triable(seq(s=>{
+                    var o   = s(p);
+                    var rhs = s(term);
+                    return s.success ? o(lhs, rhs) : undefined;  
+                }))));
+            });
+            return expr;
+        };
+    }
+
+    export function prefix<U,A>(p: Parser<(a: A) => A>): Operator<U,A> {
+        return function(term: Parser<A>){
+            return seq(s=>{
+                var lhs = s(term);
+                var o   = s(p);
+                return o ? o(lhs) : undefined;
+            });
+        };
+    }
+
+    export function postfix<U,A>(p: Parser<(a: A) => A>): Operator<U,A> {
+        return function(term: Parser<A>){
+            return seq(s=>{
+                var o   = s(p);
+                var rhs = s(term);
+                return o ? o(rhs) : undefined;
+            });
+        };
+    }
+
+    export function buildExpressionParser<U,A>(operatorTable: Operator<U,A>[][], p: Parser<A>): Parser<A> {
+        var layers = new Array<Parser<A>>(operatorTable.length + 1);
+        layers[0] = p;        
+        for(var i = 0; i < operatorTable.length; i++){
+            var ops = operatorTable[i];
+            layers[i + 1] = choice(ops.map((op: Operator<U,A>)=>op(layers[i])));
+        }
+        return layers[layers.length - 1];
+    }
+
+
+
+
+
+
 
     ////////////////////////////////////////////////////////////////////
     // Util ////////////////////////////////////////////////////////////

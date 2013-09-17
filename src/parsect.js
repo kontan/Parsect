@@ -46,6 +46,9 @@ var Parsect;
             this.position = position;
             this._userState = _userState;
             this._path = _path;
+            assert(typeof source !== "undefined");
+            assert(source !== null);
+
             if (position < 0 || position > source.length + 1)
                 throw "_position: out of range: " + position;
             Object.defineProperty(this, "path", { get: function () {
@@ -55,12 +58,12 @@ var Parsect;
         State.prototype.seek = function (count) {
             return new State(this.source, this.position + count, this._userState, this._path);
         };
-        State.prototype.push = function (tag) {
+        State.prototype.pushTag = function (tag) {
             var _path_ = this._path.slice(0);
             _path_.push(tag);
             return new State(this.source, this.position, this._userState, _path_);
         };
-        State.prototype.pop = function () {
+        State.prototype.popTag = function () {
             var _path_ = this._path.slice(0);
             _path_.shift();
             return new State(this.source, this.position, this._userState, _path_);
@@ -457,11 +460,15 @@ else
     }
     Parsect.lookAhead = lookAhead;
 
-    function notFollowedBy(value, p) {
+    function notFollowedBy(p, q) {
         p = asParser(p);
+        q = asParser(q);
         function notFollowedByParser(source) {
-            var st = parse(p, source);
-            return st.success ? failure(st.state, 'unexpected ' + st.value) : success(source, value);
+            var rep = parse(p, source);
+            if (!rep.success)
+                return rep;
+            var _rep = parse(q, rep.state);
+            return _rep.success ? failure(_rep.state, 'unexpected ' + _rep.value) : rep;
         }
         return new Parser(notFollowedByParser);
     }
@@ -498,6 +505,25 @@ else
     }
     Parsect.apply = apply;
 
+    function skipMany(p) {
+        function skipManyParser(state) {
+            while (true) {
+                var rep = parse(p, state);
+                if (!rep.success)
+                    break;
+                state = rep.state;
+            }
+            return success(state, undefined);
+        }
+        return new Parser(skipManyParser);
+    }
+    Parsect.skipMany = skipMany;
+
+    function skipMany1(p) {
+        return tail(p, skipMany(p));
+    }
+    Parsect.skipMany1 = skipMany1;
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Build-in Parsees /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -515,11 +541,19 @@ else
     function tag(name, parser) {
         parser = asParser(parser);
         return new Parser(function (source) {
-            var result = parse(parser, source.push(name));
-            return result.success ? success(result.state.pop(), result.value) : result;
+            var result = parse(parser, source.pushTag(name));
+            return result.success ? success(result.state.popTag(), result.value) : result;
         });
     }
     Parsect.tag = tag;
+
+    function unexpected(message) {
+        function unexpectedParser(state) {
+            return failure(state, message);
+        }
+        return new Parser(unexpectedParser);
+    }
+    Parsect.unexpected = unexpected;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Charactor parser constructor /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -581,10 +615,14 @@ else
     Parsect.satisfy = satisfy;
 
     /// string parser
-    function string(text) {
+    function string(text, caseSensitive) {
+        if (typeof caseSensitive === "undefined") { caseSensitive = true; }
         assert(typeof text === "string" || text instanceof String);
+        text = caseSensitive ? text : text.toLowerCase();
         function stringParser(s) {
-            return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
+            var slice = s.source.slice(s.position, s.position + text.length);
+            return text === (caseSensitive ? slice : slice.toLowerCase()) ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
+            //return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser(stringParser);
     }
@@ -626,6 +664,301 @@ else
         });
     }
     Parsect.charCode = charCode;
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Token parser builder
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    var LanguageDef = (function () {
+        function LanguageDef(commentStart, commentEnd, commentLine, nestedComments, identStart, identLetter, opStart, opLetter, reservedNames, reservedOpNames, caseSensitive) {
+            this.commentStart = commentStart;
+            this.commentEnd = commentEnd;
+            this.commentLine = commentLine;
+            this.nestedComments = nestedComments;
+            this.identStart = identStart;
+            this.identLetter = identLetter;
+            this.opStart = opStart;
+            this.opLetter = opLetter;
+            this.reservedNames = reservedNames;
+            this.reservedOpNames = reservedOpNames;
+            this.caseSensitive = caseSensitive;
+        }
+        return LanguageDef;
+    })();
+    Parsect.LanguageDef = LanguageDef;
+
+    function makeTokenParser(def) {
+        /////////////////////////////////////////////////////////////////////////////////////////
+        // White space & symbols
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        function symbol(name) {
+            return lexeme(string(name));
+        }
+        function lexeme(p) {
+            return seq(function (s) {
+                var x = s(p);
+                s(whiteSpace);
+                return x;
+            });
+        }
+
+        // whiteSpace
+        var noLine = def.commentLine.length == 0;
+        var noMulti = def.commentStart.length == 0;
+
+        var oneLineComment = seq(function (s) {
+            s(triable(string(def.commentLine)));
+            skipMany(satisfy(function (x) {
+                return x != '\n';
+            }));
+            return undefined;
+        });
+        var multiLineComment = seq(function (s) {
+            s(triable(string(def.commentStart)));
+            return s(inComment);
+        });
+        var startEnd = (def.commentEnd + def.commentStart).split('').filter(function (x, i, xs) {
+            return xs.indexOf(x) === i;
+        }).join("");
+        var inCommentMulti = or(seq(function (s) {
+            s(triable(string(def.commentEnd)));
+            return undefined;
+        }), seq(function (s) {
+            s(multiLineComment);
+            s(inCommentMulti);
+        }), seq(function (s) {
+            s(skipMany1(noneOf(startEnd)));
+            s(inCommentMulti);
+        }), seq(function (s) {
+            s(oneOf(startEnd));
+            s(inCommentMulti);
+        }));
+        var inCommentSingle = or(seq(function (s) {
+            s(triable(string(def.commentEnd)));
+            return undefined;
+        }), seq(function (s) {
+            s(skipMany1(noneOf(startEnd)));
+            return s(inCommentSingle);
+        }), seq(function (s) {
+            s(oneOf(startEnd));
+            return s(inCommentSingle);
+        }));
+        var inComment = def.nestedComments ? inCommentMulti : inCommentSingle;
+        var simpleSpace = skipMany1(oneOf(" \t\r\n"));
+        var whiteSpace = noLine && noMulti ? skipMany(simpleSpace) : noLine ? skipMany(or(simpleSpace, multiLineComment)) : noMulti ? skipMany(or(simpleSpace, oneLineComment)) : skipMany(or(simpleSpace, oneLineComment, multiLineComment));
+
+        ////////////////////////////////////////////////////////////////////////////////////
+        // Operators & reserved ops
+        ////////////////////////////////////////////////////////////////////////////////////////
+        function reservedOp(name) {
+            return lexeme(triable(notFollowedBy(string(name), def.opLetter)));
+        }
+
+        var operator = lexeme(triable(seq(function (s) {
+            var name = s(oper);
+            return isReservedOp(name) ? s(unexpected("reserved operator " + name)) : name;
+        })));
+
+        var oper = seq(function (s) {
+            var c = s(def.opStart);
+            var cs = s(Join.many(def.opLetter));
+            return c + cs;
+        });
+
+        function isReservedOp(name) {
+            return def.reservedOpNames.indexOf(name) >= 0;
+        }
+
+        /////////////////////////////////////////////////////////////////////////
+        // Identifiers & Reserved words
+        /////////////////////////////////////////////////////////////////////////////////////////
+        function reserved(name) {
+            return lexeme(triable(notFollowedBy(string(name, def.caseSensitive), def.identLetter)));
+        }
+
+        var identifier = lexeme(triable(seq(function (s) {
+            var name = s(ident);
+            if (isReservedName(name)) {
+                return s(unexpected("reserved word " + name));
+            } else {
+                return name;
+            }
+        })));
+
+        var ident = seq(function (s) {
+            var c = s(def.identStart);
+            var cs = s(Join.many(def.identLetter));
+            return s(function () {
+                return c + cs;
+            });
+        });
+
+        var theReservedNames = def.caseSensitive ? def.reservedNames : def.reservedNames.map(function (n) {
+            return n.toLowerCase();
+        });
+
+        function isReservedName(name) {
+            var caseName = def.caseSensitive ? name : name.toLowerCase();
+            return theReservedNames.indexOf(caseName) >= 0;
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // Numbers
+        /////////////////////////////////////////////////////////////////////////////
+        var float = lexeme(Parsect.number);
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // Bracketing
+        //////////////////////////////////////////////////////////////////////////////////////
+        function parens(p) {
+            return between(symbol("("), p, symbol(")"));
+        }
+        function braces(p) {
+            return between(symbol("{"), p, symbol("}"));
+        }
+        function angles(p) {
+            return between(symbol("<"), p, symbol(">"));
+        }
+        function brackets(p) {
+            return between(symbol("["), p, symbol("]"));
+        }
+
+        var semi = symbol(";");
+        var comma = symbol(",");
+        var dot = symbol(".");
+        var colon = symbol(":");
+
+        function commaSep(p) {
+            return sepBy(p, comma);
+        }
+        function semiSep(p) {
+            return sepBy(p, semi);
+        }
+        function commaSep1(p) {
+            return sepBy1(p, comma);
+        }
+        function semiSep1(p) {
+            return sepBy1(p, semi);
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////////////
+        // Chars & Strings
+        //////////////////////////////////////////////////////////////////////////////
+        var escapeCode = seq(function (s) {
+            var c = s(satisfy(function (_) {
+                return true;
+            }));
+            switch (c) {
+                case "r":
+                    return "\r";
+                case "n":
+                    return "\n";
+                default:
+                    return s(unexpected(c));
+            }
+        });
+
+        var charLetter = satisfy(function (c, i) {
+            return (c != "'") && (c != "\\") && (i > 26);
+        });
+        var charEscape = tail(string('\\'), escapeCode);
+        var characterChar = or(charLetter, charEscape);
+        var charLiteral = lexeme(between(string('\''), characterChar, string('\'')));
+
+        var stringLiteral = lexeme(/"(\\[rn"]|[^"])"/);
+
+        return {
+            identifier: identifier,
+            reserved: reserved,
+            operator: operator,
+            reservedOp: reservedOp,
+            charLiteral: charLiteral,
+            stringLiteral: stringLiteral,
+            //natural: natural,
+            //integer: integer,
+            float: float,
+            //naturalOrFloat: naturalOrFloat,
+            //decimal: decimal,
+            //hexadecimal: hexadecimal,
+            //octal: octal,
+            symbol: symbol,
+            lexeme: lexeme,
+            whiteSpace: whiteSpace,
+            parens: parens,
+            braces: braces,
+            angles: angles,
+            brackets: brackets,
+            squares: brackets,
+            semi: semi,
+            comma: comma,
+            colon: colon,
+            dot: dot,
+            semiSep: semiSep,
+            semiSep1: semiSep1,
+            commaSep: commaSep,
+            commaSep1: commaSep1
+        };
+    }
+    Parsect.makeTokenParser = makeTokenParser;
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Expression Parser
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
+    (function (Assoc) {
+        Assoc[Assoc["None"] = 0] = "None";
+        Assoc[Assoc["Left"] = 1] = "Left";
+        Assoc[Assoc["Right"] = 2] = "Right";
+    })(Parsect.Assoc || (Parsect.Assoc = {}));
+    var Assoc = Parsect.Assoc;
+
+    function infix(p, assoc) {
+        return function (term) {
+            var expr = seq(function (s) {
+                var lhs = s(term);
+                return s(option(lhs, triable(seq(function (s) {
+                    var o = s(p);
+                    var rhs = s(term);
+                    return s.success ? o(lhs, rhs) : undefined;
+                }))));
+            });
+            return expr;
+        };
+    }
+    Parsect.infix = infix;
+
+    function prefix(p) {
+        return function (term) {
+            return seq(function (s) {
+                var lhs = s(term);
+                var o = s(p);
+                return o ? o(lhs) : undefined;
+            });
+        };
+    }
+    Parsect.prefix = prefix;
+
+    function postfix(p) {
+        return function (term) {
+            return seq(function (s) {
+                var o = s(p);
+                var rhs = s(term);
+                return o ? o(rhs) : undefined;
+            });
+        };
+    }
+    Parsect.postfix = postfix;
+
+    function buildExpressionParser(operatorTable, p) {
+        var layers = new Array(operatorTable.length + 1);
+        layers[0] = p;
+        for (var i = 0; i < operatorTable.length; i++) {
+            var ops = operatorTable[i];
+            layers[i + 1] = choice(ops.map(function (op) {
+                return op(layers[i]);
+            }));
+        }
+        return layers[layers.length - 1];
+    }
+    Parsect.buildExpressionParser = buildExpressionParser;
 
     ////////////////////////////////////////////////////////////////////
     // Util ////////////////////////////////////////////////////////////

@@ -77,6 +77,14 @@ module Tests {
         ok(result.equals(expected));
     });
 
+    test("string parser 5 case sensitive 1", function() {
+        var parser = p.string("HOGE", false);
+        var source = "hoge";
+        var expected = p.success(new p.State(source, 4), "hoge");
+        var result = p.parse(parser, source);
+        ok(result.equals(expected));
+    });
+
     interface SeqTestData{
         e: string;
     }
@@ -438,6 +446,129 @@ module Tests {
         var result = p.parse(parser, input);
         ok(result.equals(expected));
     });
+
+
+    module OperatorTableTest {
+
+        var tokenParser = p.makeTokenParser(new p.LanguageDef(
+            '/*',                   // commentStart
+            '*/',                   // commentEnd
+            '//',                   // commentLine
+            true,                   // nestedComments
+            /[_a-zA-Z]/,            // identStart
+            /[_a-zA-Z0-9]/,         // identLetter
+            /[+\-*\/=!$%&\^~@?_]/,    // opStart
+            /[+\-*\/=!$%&\^~@?_]/,    // opLetter
+            [],                     // reservedNames
+            [],                     // reservedOpNames
+            true                    // caseSensitive
+        ));
+
+        var reservedOp = tokenParser.reservedOp;
+
+        function binary<U,A>(name: string, fun: (a: A, b: A)=>A, assoc: p.Assoc): p.Operator<U,A> {
+            return p.infix(p.tail(reservedOp(name), p.pure(()=>fun)), assoc);
+        }
+        function prefix<U,A>(name: string, fun: (a: A)=>A): p.Operator<U,A> {
+            return p.prefix(p.tail(reservedOp(name), p.pure(()=>fun)));
+        }
+        function postfix<U,A>(name: string, fun: (a: A)=>A): p.Operator<U,A> {
+            return p.postfix(p.tail(reservedOp(name), p.pure(()=>fun)));
+        }
+        var table: p.Operator<void,number>[][] = [
+            [prefix("-", x=>-x), prefix("+", x=>x)], 
+            [postfix("++", x=>x+1)], 
+            [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+            [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
+        ];
+        var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+        var expr = p.buildExpressionParser(table, term);
+        var parser = expr;
+
+        test("token parser: float", ()=>{
+            var source = "42";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 2), 42);
+            var result = p.parse(tokenParser.float, input);
+            ok(result.equals(expected));
+        });
+
+        test("token parser: whiteSpace", ()=>{
+            var source = "    42";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 4), undefined);
+            var result = p.parse(tokenParser.whiteSpace, input);
+            ok(result.equals(expected));
+        });
+
+        test("token parser: reservedOp", ()=>{
+            var source = "*  ";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 3), "*");
+            var result = p.parse(tokenParser.reservedOp("*"), input);
+            ok(result.equals(expected));
+        });
+
+        test("operator table 1", ()=>{
+            var table: p.Operator<void,number>[][] = [
+                [binary("*", (x,y)=>x*y, p.Assoc.Left)], 
+            ];
+            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var expr = p.buildExpressionParser(table, term);
+
+            var source = "3*5";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 3), 15);
+            var result = p.parse(expr, input);
+            ok(result.equals(expected));
+        });
+
+        test("operator table 2", ()=>{
+            var table: p.Operator<void,number>[][] = [
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+                [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
+            ];
+            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var expr = p.buildExpressionParser(table, term);
+
+            var source = "3*5+1";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 5), 16);
+            var result = p.parse(expr, input);
+            ok(result.equals(expected));
+        });
+
+        test("operator table 3", ()=>{
+            var table: p.Operator<void,number>[][] = [
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+                [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
+            ];
+            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var expr = p.buildExpressionParser(table, term);
+
+            var source = "1+3*5";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 5), 16);
+            var result = p.parse(expr, input);
+            ok(result.equals(expected));
+        });
+
+        test("operator table 4", ()=>{
+            var table: p.Operator<void,number>[][] = [
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+                [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
+            ];
+            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var expr = p.buildExpressionParser(table, term);
+
+            var source = "(1  +3)*  5";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, 11), 20);
+            var result = p.parse(expr, input);
+            ok(result.equals(expected));
+        });
+    }
+
 
     test("seq parser json ast", function() {
         var identifier = p.regexp(/[A-z]+/);
