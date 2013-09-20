@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            body, html{
+                margin: 0px;
+                padding: 0px;   
+                background-color: rgb(82, 63, 14);
+                color: white;
+                font-family: serif;
+                background-image: url("seamlesspaper1.jpg");
+            }
+            h1 {
+                padding-left: 1em;
+                letter-spacing: 0.2em;
+                text-shadow: 2px 2px 2px darkgrey; 
+            }
+            section.left {
+                float: left;
+                width: calc(50% - 40px);
+                padding: 20px;
+            }
+            section.right {
+                float: left;
+                width: calc(50% - 40px);
+                padding: 20px;
+            }
+            textarea {
+                width: 100%;
+                height: 600px;
+                font-style: monospace;
+                font-size: small;
+                color: rgb(53, 37, 29);
+                background-color: rgb(222, 235, 222);
+                background-image: url("tatami01.jpg");
+            }
+            textarea#error {
+                height: 60px;
+            }
+            textarea#compiled {
+                height: 100px;
+            }
+            textarea#output {
+                height: 100px;
+            }            
+        </style>
+    </head>
+
+    <body>
+        <h1>BanchaScript Playground</h1>
+        <section class="left">
+
+<textarea id="source">// 関数呼び出し
+log(1 + 2 * 42);
+
+// 変数
+var x = 1 + 2 * 3;
+
+// 関数の定義
+def factorial(k){
+    def t(){
+        return k * factorial(k - 1);
+    }
+    def f(){
+        return 1;
+    }
+    return cond(k > 1, t, f);
+}
+
+log(factorial(10));
+
+// 演算子の定義
+operator |^_^|< prefix 5 = log; 
+
+// 演算子の適用
+|^_^|< "わたしです";
+
+// ネストできるブロックコメント
+/* This's /* comment */ text. */</textarea>
+        
+        </section>
+
+        <section class="right">
+            <h5>Compiler Messages:</h5>
+            <textarea id="error" readonly></textarea>
+            <h5>Compiled Source Text:</h5>
+            <textarea id="compiled" readonly></textarea>
+            <h5>Output:</h5>
+            <textarea id="output" readonly></textarea>
+        </section>
+
+        <script src="../../src/parsect.js"></script>
+        <script src="bancha.js"></script>
+        <script>
+            var source   = document.getElementById("source");
+            var compiled = document.getElementById("compiled");
+            var output   = document.getElementById("output");
+            
+            function compile(){
+                "use strict";
+                var reply = bancha.compile(source.value);
+                if(reply.success){
+                    error.value = "Compiled successfully.";
+                    compiled.value = reply.value;
+                    var outputText = "";
+                    
+                    try{
+                        function log(v) {
+                            outputText += v + "\n";
+                        }
+                        function cond(c, t, f){
+                            return c ? t() : f();
+                        }
+                        eval(reply.value);
+                    }catch(e){
+                        console.log(e);
+                    }
+
+                    output.value = outputText;
+                }else{
+                    var pos = reply.state.rawColumn;
+                    error.value = "(" + (pos.raw + 1) + "," + (pos.column + 1) + "): expected " + reply.expected;
+                    compiled.value = "";
+                    output.value = "";
+                }
+            }
+
+            source.onkeyup = compile;
+            compile();
+        </script>
+
+    </body>
+</html>    

@@ -9,6 +9,17 @@ module Tests {
         return ss.join();
     }
 
+    function parse<A,U>(parser: p.Parser<A>, source: string  ): p.Reply<A,U>;
+    function parse<A,U>(parser: p.Parser<A>, source: p.State<U>): p.Reply<A,U>;
+    function parse<A,U>(parser: p.Parser<A>, source: any     ): p.Reply<A,U> {
+             if(source instanceof p.State  ) ;
+        else if(typeof source === "string") source = new p.State(source);
+        else if(source instanceof String  ) source = new p.State(source);
+        else throw new Error();
+        var parser = <any>p.asParser(parser);
+        return p.parse(parser, source);
+    }    
+
     test("State object instantiation and equation", function() {
         var src:p.State<void> = new p.State<void>("hoge");
         ok(src.equals(new p.State("hoge", 0)));
@@ -22,7 +33,7 @@ module Tests {
         var src:p.State<void> = new p.State("hoge");
         ok(src.equals(new p.State("hoge", 0)));
         p.success(src.seek(2), "2");
-        ok(src.equals(new p.State("hoge", 0)));    
+        ok(src.equals(new p.State("hoge", 0)));
         p.failure(src, "fail");
         ok(src.equals(new p.State("hoge", 0)));
     });
@@ -31,14 +42,14 @@ module Tests {
         var parser = "hoge";
 
         // Success
-        var s = p.parse(parser, new p.State("hoge"));
+        var s = parse(parser, new p.State("hoge"));
         ok(s.success);
         strictEqual(s.state.position, 4);
         strictEqual(s.value, "hoge");
         strictEqual(s.expected, undefined);
 
         // Success
-        var s = p.parse(parser, "hoge");
+        var s = parse(parser, "hoge");
         ok(s.success);
         strictEqual(s.state.position, 4);
         strictEqual(s.value, "hoge");
@@ -49,7 +60,7 @@ module Tests {
         var parser = "hoge";
         var source = "hoge";
         var expected = p.success(new p.State(source, 4), "hoge");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -57,7 +68,7 @@ module Tests {
         var parser = "hoge";
         var source = "piyo";
         var expected = p.failure(new p.State(source), "\"hoge\"");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -65,7 +76,7 @@ module Tests {
         var parser = "hoge";
         var source = "hopo";
         var expected = p.failure(new p.State(source), "\"hoge\"");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -73,7 +84,7 @@ module Tests {
         var parser = "hoge";
         var source = "";
         var expected = p.failure(new p.State(source), "\"hoge\"");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -81,7 +92,7 @@ module Tests {
         var parser = p.string("HOGE", false);
         var source = "hoge";
         var expected = p.success(new p.State(source, 4), "hoge");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -99,12 +110,12 @@ module Tests {
         // Success
         var source = "(hoge)";
         var expected: p.Reply<SeqTestData,void> = p.success<SeqTestData,void>(new p.State(source, 6), { 'e': 'hoge' });
-        ok(p.parse(parser, source).equals(expected));
+        ok(parse(parser, source).equals(expected));
 
           // Fail
         var source = "(piyo)";
         var expected2: p.Reply<any,void> = p.failure(new p.State<void>(source, 1), "\"hoge\"");
-        ok(p.parse(parser, source).equals(expected2));
+        ok(parse(parser, source).equals(expected2));
     });
 
     interface SeqTestJsonData{
@@ -123,11 +134,11 @@ module Tests {
         var parser = p.seq(s=>{
             var a = s("a");
             var b = s("b");
-            return s(()=> a + b);
-        }); 
+            return s.success && a + b;
+        });
         var source = "ab";
         var expected = p.success(new p.State(source, 2), "ab");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -144,39 +155,39 @@ module Tests {
 
         var source = "(b)";
         var expected = p.failure(new p.State("(b)", 1), "\"a\"");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("count 1", ()=>{
-        var parser = p.map(join,  p.count(3, "a"));
+        var parser = p.fmap(join,  p.count(3, "a"));
         var source = "aaa";
         var expected = p.success(new p.State("aaa", 3), "a,a,a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("many 1", ()=>{
-        var parser = p.map(join, p.many("a"));
+        var parser = p.fmap(join, p.many("a"));
         var source = "aa";
         var expected = p.success(new p.State("aa", 2), "a,a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("many1 1", ()=>{
-        var parser = p.map( join, p.many1("a"));
+        var parser = p.fmap( join, p.many1("a"));
         var source = "aaaaaaa";
         var expected = p.success(new p.State("aaaaaaa", 7), "a,a,a,a,a,a,a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("many1 2", ()=>{
-        var parser = p.map(join, p.many1("a"));
+        var parser = p.fmap(join, p.many1("a"));
         var source = "aaaaaaa";
         var expected = p.success(new p.State("aaaaaaa", 7), "a,a,a,a,a,a,a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -184,7 +195,7 @@ module Tests {
         var parser = p.number;
         var source = "-123.567";
         var expected = p.success(new p.State("-123.567", 8), -123.567);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -192,7 +203,7 @@ module Tests {
         var source = "baabbabaabbbazaabb";
         var parser = p.many(p.or("a", "b"));
         var expected = new p.Reply(new p.State(source, 13), true, ["b","a","a","b","b","a","b","a","a","b","b","b","a"]);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -200,180 +211,180 @@ module Tests {
         var source = "x";
         var parser = p.or("a", "b", /c/);
         var expected = p.failure(new p.State(source, 0), "one of \"a\",\"b\",/c/");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("head 1", ()=>{
-        var parser = p.head("a", "b");         
+        var parser = p.head("a", "b");
         var source = "ab";
         var expected = p.success(new p.State(source, 2), "a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("tail 1", ()=>{
-        var parser = p.tail("a", "b");         
+        var parser = p.tail("a", "b");
         var source = "ab";
         var expected = p.success(new p.State(source, 2), "b");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("tail 2", ()=>{
-        var parser = p.tail("a", p.head("b", "c"));         
+        var parser = p.tail("a", p.head("b", "c"));
         var source = "abc";
         var expected = p.success(new p.State(source, 3), "b");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
-    });    
+    });
 
     test("sepBy1 1", ()=>{
         var source = "a_a_a";
-        var parser = p.sepBy1("a", "_"); 
+        var parser = p.sepBy1("a", "_");
         var expected = p.success(new p.State(source, 5), ["a", "a", "a"]);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("sepBy1 2", ()=>{
-        var parser = p.map(join, p.sepBy1("a", "_")); 
+        var parser = p.fmap(join, p.sepBy1("a", "_"));
         var source = "";
         var expected = p.failure(new p.State(source), "\"a\"");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("sepBy1 3", ()=>{
-        var parser = p.map(join, p.sepBy1("a", "_")); 
+        var parser = p.fmap(join, p.sepBy1("a", "_"));
         var source = "a";
         var expected = p.success(new p.State(source, 1), "a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("sepBy1 4", ()=>{
-        var parser = p.map(join, p.sepBy1("a", "_")); 
+        var parser = p.fmap(join, p.sepBy1("a", "_"));
         var source = "a_b";
         var expected = p.failure(new p.State(source, 2), "\"a\"");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("endByN 1", ()=>{
         var source = "a;a;a;";
-        var parser = p.endBy("a", ";"); 
+        var parser = p.endBy("a", ";");
         var expected = p.success(new p.State(source, 6), ["a", "a", "a"]);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
 
     test("between 1", ()=>{
-        var parser = p.between('[', 'a', ']'); 
+        var parser = p.between('[', 'a', ']');
         var source = "[a]";
         var expected = p.success(new p.State(source, 3), "a");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("between 2", ()=>{
-        var parser = p.between('[', 'a', ']'); 
+        var parser = p.between('[', 'a', ']');
         var source = "[b]";
         var expected = p.failure(new p.State(source, 1), "\"a\"");
-        ok(p.parse(parser, source).equals(expected));
+        ok(parse(parser, source).equals(expected));
     });
 
     test("between 3", ()=>{
-        var parser = p.between('[', 'a', ']'); 
+        var parser = p.between('[', 'a', ']');
         var source = "[a]";
         var expected = p.success(new p.State(source, 3), "a");
-        ok(p.parse(parser, source).equals(expected));
+        ok(parse(parser, source).equals(expected));
     });
 
     test("pure 1", ()=>{
-        var parser = p.pure("x");         
+        var parser = p.pure("x");
         var source = "abc";
         var expected = p.success(new p.State(source, 0), "x");
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
-    }); 
+    });
 
     test("eof 1", ()=>{
-        var parser = p.eof; 
+        var parser = p.eof;
         var source = "";
         var expected = p.success(new p.State(source, 1),  undefined);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("eof 2", ()=>{
-        var parser = p.tail("a", p.eof); 
+        var parser = p.tail("a", p.eof);
         var source = "a";
         var expected = p.success(new p.State(source, 2),  undefined);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
-    test("eof 2", ()=>{
-        var parser = p.eof; 
+    test("eof 3", ()=>{
+        var parser = p.eof;
         var source = "a";
-        var expected = p.failure(new p.State(source), undefined);
-        var result = p.parse(parser, source);
+        var expected = p.failure(new p.State(source, 0), "end of file");
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("empty 1", ()=>{
-        var parser = p.empty; 
+        var parser = p.empty;
         var source = "a";
         var expected = p.success(new p.State(source, 0),  undefined);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("satisfy 1", ()=>{
-        var parser = p.map(join, p.many1(p.satisfy(c=>{ 
+        var parser = p.fmap(join, p.many1(p.satisfy(c=>{
             var i = c.charCodeAt(0);
             return i >= 80 && i <= 85;
-        })));; 
+        })));;
         var source = "PQRRQPOPhoge";
         var expected = p.success(new p.State(source, 6), 'P,Q,R,R,Q,P');
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("satisfy 2", ()=>{
-        var parser = p.map(join, p.many1(p.satisfy(c=>{ 
+        var parser = p.fmap(join, p.many1(p.satisfy(c=>{
             var i = c.charCodeAt(0);
             return i >= 80 && i <= 85;
-        })));; 
+        })));;
         var source = "XXXXXXXXXXXX";
         var expected = p.failure(new p.State(source), 'one of "PQRSTU"');
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("regexp 1", ()=>{
-        var parser = p.regexp(/abcde/); 
+        var parser = p.regexp(/abcde/);
         var source = "abcde";
         var expected = p.success(new p.State(source, 5), source);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("regexp 2", ()=>{
-        var parser = p.regexp(/abc/); 
+        var parser = p.regexp(/abc/);
         var source = "xxabcxx";
         var expected = p.failure(new p.State(source), '/abc/');
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
     test("regexp 3", ()=>{
-        var parser = p.regexp(/a*/); 
+        var parser = p.regexp(/a*/);
         var source = "aaaaabbbbb";
         var expected = p.success(new p.State(source, 5), 'aaaaa');
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -381,7 +392,7 @@ module Tests {
         var parser = p.or(/[a-z]/, p.between("[", ()=> parser, "]"));
         var source = "[[[[x]]]]";
         var expected = p.success(new p.State(source, 9), 'x');
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -389,7 +400,7 @@ module Tests {
         var parser = p.or(/[a-z]/, p.between("[", ()=> parser, "]"));
         var source = "[[[[x]]]";
         var expected = p.failure(new p.State(source, 8), '"]"');
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -401,15 +412,15 @@ module Tests {
             var c = s(p.count(a.length, "c"));
             return [a, b, c];
         });
-        
+
         var source = "aaaabbbbcccc";
         var expected = p.success(new p.State(source, 12), [["a", "a", "a", "a"], ["b", "b", "b", "b"], ["c", "c", "c", "c"]]);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
 
         var source2 = "aaaabbbbcc";
         var expected2 = p.failure(new p.State(source2, 10), "\"c\"");
-        var result2 = p.parse(parser, source2);
+        var result2 = parse(parser, source2);
         ok(result2.equals(expected2));
     });
 
@@ -418,10 +429,10 @@ module Tests {
         var layer1 = p.tag("layer1", p.between("[", bottom, "]"));
         var layer2 = p.tag("layer2", p.or("123", layer1, "567"));
         var parser = p.tag("top", p.series("(", layer2, ")"));
-        
+
         var source = "([xyz])";
         var expected = p.failure(new p.State(source, 2), undefined);
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
         ok(result.failurePath === "top > layer2 > layer1 > bottom");
     });
@@ -430,7 +441,7 @@ module Tests {
         var parser = ["x", "y", "z"];
         var source = "xyz";
         var expected = p.success(new p.State(source, 3), ["x", "y", "z"]);
-        var result = p.parse(<any>parser, source);
+        var result = parse(<any>parser, source);
         ok(result.equals(expected));
     });
 
@@ -438,49 +449,51 @@ module Tests {
         var parser = p.seq<string,number>(s=>{
             var u: number = s.userState;
             s.userState = u * 2;
-            return s("Hoge"); 
+            return s("Hoge");
         });
         var source = "Hoge";
         var input = new p.State(source, 0, 42);
         var expected = p.success(new p.State(source, 4, 84), "Hoge");
-        var result = p.parse(parser, input);
+        var result = parse(parser, input);
         ok(result.equals(expected));
     });
 
 
     module OperatorTableTest {
 
-        var tokenParser = p.makeTokenParser(new p.LanguageDef(
-            '/*',                   // commentStart
-            '*/',                   // commentEnd
-            '//',                   // commentLine
-            true,                   // nestedComments
-            /[_a-zA-Z]/,            // identStart
-            /[_a-zA-Z0-9]/,         // identLetter
-            /[+\-*\/=!$%&\^~@?_]/,    // opStart
-            /[+\-*\/=!$%&\^~@?_]/,    // opLetter
-            [],                     // reservedNames
-            [],                     // reservedOpNames
-            true                    // caseSensitive
-        ));
+        var lexer = p.makeTokenParser({
+            commentStart:       '/*',
+            commentEnd:         '*/',
+            commentLine:        '//',
+            nestedComments:     true,
+            identStart:         /[_a-zA-Z]/,
+            identLetter:        /[_a-zA-Z0-9]/,
+            opStart:            /[+\-*\/=!$%&\^~@?_]/,
+            opLetter:           /[+\-*\/=!$%&\^~@?_]/,
+            reservedNames:      [],
+            reservedOpNames:    [],
+            caseSensitive:      true
+        });
 
-        var reservedOp = tokenParser.reservedOp;
+        var reservedOp = lexer.reservedOp;
+        var reserved   = lexer.reserved;
+        var parens     = lexer.parens; 
 
         function binary<A>(name: string, fun: (a: A, b: A)=>A, assoc: p.Assoc): p.Operator<A> {
-            return p.infix(p.tail(reservedOp(name), p.pure(fun)), assoc);
+            return p.infix(p.fmap(_=>fun, reservedOp(name)), assoc);
         }
         function prefix<A>(name: string, fun: (a: A)=>A): p.Operator<A> {
-            return p.prefix(p.tail(reservedOp(name), p.pure(fun)));
+            return p.prefix(p.fmap(_=>fun, reservedOp(name)));
         }
         function postfix<A>(name: string, fun: (a: A)=>A): p.Operator<A> {
-            return p.postfix(p.tail(reservedOp(name), p.pure(fun)));
+            return p.postfix(p.fmap(_=>fun, reservedOp(name)));
         }
 
         test("token parser: float", ()=>{
             var source = "42";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 2), 42);
-            var result = p.parse(tokenParser.float, input);
+            var result = parse(lexer.naturalOrFloat, input);
             ok(result.equals(expected));
         });
 
@@ -488,7 +501,7 @@ module Tests {
             var source = "    42";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 4), undefined);
-            var result = p.parse(tokenParser.whiteSpace, input);
+            var result = parse(lexer.whiteSpace, input);
             ok(result.equals(expected));
         });
 
@@ -496,66 +509,66 @@ module Tests {
             var source = "*  ";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 3), "*");
-            var result = p.parse(tokenParser.reservedOp("*"), input);
+            var result = parse(lexer.reservedOp("*"), input);
             ok(result.equals(expected));
         });
 
         test("operator table 1", ()=>{
             var table: p.Operator<number>[][] = [
-                [binary("*", (x,y)=>x*y, p.Assoc.Left)], 
+                [binary("*", (x,y)=>x*y, p.Assoc.Left)],
             ];
-            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var term: p.Parser<number> = p.or(parens(()=>expr), lexer.naturalOrFloat);
             var expr = p.buildExpressionParser(table, term);
 
             var source = "3*5";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 3), 15);
-            var result = p.parse(expr, input);
+            var result = parse(expr, input);
             ok(result.equals(expected));
         });
 
         test("operator table 2", ()=>{
             var table: p.Operator<number>[][] = [
-                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)],
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
-            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var term: p.Parser<number> = p.or(parens(()=>expr), lexer.naturalOrFloat);
             var expr = p.buildExpressionParser(table, term);
 
             var source = "3*5+1";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 5), 16);
-            var result = p.parse(expr, input);
+            var result = parse(expr, input);
             ok(result.equals(expected));
         });
 
         test("operator table 3", ()=>{
             var table: p.Operator<number>[][] = [
-                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)],
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
-            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var term: p.Parser<number> = p.or(parens(()=>expr), lexer.naturalOrFloat);
             var expr = p.buildExpressionParser(table, term);
 
             var source = "1+3*5";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 5), 16);
-            var result = p.parse(expr, input);
+            var result = parse(expr, input);
             ok(result.equals(expected));
         });
 
         test("operator table 4", ()=>{
             var table: p.Operator<number>[][] = [
-                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)], 
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)],
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
-            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var term: p.Parser<number> = p.or(parens(()=>expr), lexer.naturalOrFloat);
             var expr = p.buildExpressionParser(table, term);
 
             var source = "(1  +3)*  5";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, 11), 20);
-            var result = p.parse(expr, input);
+            var result = parse(expr, input);
             ok(result.equals(expected));
         });
 
@@ -563,14 +576,31 @@ module Tests {
             var table: p.Operator<number>[][] = [
                 [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
             ];
-            var term: p.Parser<number> = p.or(p.between("(", ()=>expr, ")"), tokenParser.float);
+            var term: p.Parser<number> = p.or(lexer.parens(()=>expr), lexer.naturalOrFloat);
             var expr = p.buildExpressionParser(table, term);
 
             var source = "7 - 3";
             var input = new p.State(source, 0);
             var expected = p.success(new p.State(source, source.length), eval(source));
-            var result = p.parse(expr, input);
+            var result = parse(expr, input);
             ok(result.equals(expected));
+        });
+
+
+        test("operator table 5", ()=>{
+            var table = [
+                [prefix("-", x=>-x), prefix("+", x=>x)],
+                [binary("*", (x,y)=>x*y, p.Assoc.Left), binary("/", (x,y)=>x/y, p.Assoc.Left)],
+                [binary("+", (x,y)=>x+y, p.Assoc.Left), binary("-", (x,y)=>x-y, p.Assoc.Left)]
+            ];
+            var term = p.or(lexer.parens(()=>expr), lexer.naturalOrFloat);
+            var expr = p.buildExpressionParser(table, term);
+
+            var source = "(7 * 3) + 3 /* comment */ * ((2) - 1) + (-10) * 2";
+            var input = new p.State(source, 0);
+            var expected = p.success(new p.State(source, source.length), eval(source));
+            var reply = parse(expr, input);
+            ok(reply.equals(expected));
         });
     }
 
@@ -598,17 +628,17 @@ module Tests {
 
         // Success
         var source = "indexOf(searchString:string,position?:number):number";
-        var expected: p.Reply<SeqTestJsonData,void> = p.success(new p.State(source, source.length), 
-            { 
-                'name': 'indexOf', 
-                'args': [ 
+        var expected: p.Reply<SeqTestJsonData,void> = p.success(new p.State(source, source.length),
+            {
+                'name': 'indexOf',
+                'args': [
                     { 'name': 'searchString', 'optional': undefined, 'type': 'string' },
                     { 'name': 'position', 'optional': '?', 'type': 'number' },
                 ],
-                'ret': 'number' 
+                'ret': 'number'
             }
         );
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         ok(result.equals(expected));
     });
 
@@ -619,10 +649,10 @@ module Tests {
 
     interface URI{
         scheme: string;
-        host: string[]; 
+        host: string[];
         port: string;
-        path: string[]; 
-        params: URIParams[];    
+        path: string[];
+        params: URIParams[];
     }
 
     test("URI", ()=>{
@@ -641,7 +671,7 @@ module Tests {
         	o.params = s(p.optional(p.tail("?", p.sepBy(param,"&"))));
         });
         var source = 'http://www.nicovideo.jp/watch/1356674833?via=thumb_watch';
-        var result = p.parse(parser, source);
+        var result = parse(parser, source);
         var expected = {"scheme":"http","host":["www","nicovideo","jp"],"path":["watch","1363247616"],"params":[{"name":"via","value":"thumb_watch"}]};
         ok(p.jsonEq(result.value, expected));
     });

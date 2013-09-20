@@ -54,6 +54,21 @@ var Parsect;
             Object.defineProperty(this, "path", { get: function () {
                     return _this._path.join(' > ');
                 } });
+            Object.defineProperty(this, "rawColumn", {
+                get: function () {
+                    var lines = source.split("\n");
+                    var position = 0;
+                    var raw = 0;
+                    while (position < _this.position) {
+                        if (_this.position <= position + lines[raw].length)
+                            break;
+                        position += lines[raw].length + 1;
+                        raw++;
+                    }
+                    var column = _this.position - position;
+                    return { raw: raw, column: column };
+                }
+            });
         }
         State.prototype.seek = function (count) {
             return new State(this.source, this.position + count, this._userState, this._path);
@@ -136,8 +151,6 @@ else if (source instanceof String)
 else
             throw new Error();
         var parser = asParser(parser);
-        if (parser instanceof Function)
-            parser = (parser)();
         return parser.runParser(source);
     }
     Parsect.parse = parse;
@@ -154,28 +167,31 @@ else if (typeof pattern === "string")
 else if (pattern instanceof Array)
             return array(pattern);
 else if (pattern instanceof Function)
-            return pattern;
+            return lazy(pattern);
 else
             throw new Error();
     }
+    Parsect.asParser = asParser;
 
-    //////////////////////////////////////////////////////////////////////////////////////
-    // Parser Combinators //////////////////////////////////////////////////////////////////////////////
-    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Parser Combinators (Text.Parsec.Combinator) ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Choice parser combinators //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function choice(ps) {
         ps = ps.map(asParser);
-        function choiceParser(source) {
+        function choiceParser(state) {
             // For debugging　and efficiency, expand list as loop intentionally.
             var sts = [];
             for (var i = 0; i < ps.length; i++) {
-                var st = parse(ps[i], source);
-                if (st.success || st.state.position != source.position) {
+                var st = parse(ps[i], state);
+                if (st.success || st.state.position != state.position) {
                     return st;
                 }
                 sts.push(st);
             }
-            return failure(source, "one of " + sts.map(function (st) {
+            return failure(state, "one of " + sts.map(function (st) {
                 return st.expected;
             }).join(','));
         }
@@ -203,8 +219,14 @@ else
             for (var i = 0; i < max; i++) {
                 var _st = parse(p, st.state);
                 if (_st.success) {
-                    st = _st;
-                    xs.push(st.value);
+                    if (_st.state.position === st.state.position && max === Number.MAX_VALUE) {
+                        throw new Error("many combinator is applied to a parser that accepts an empty string.");
+                    } else {
+                        st = _st;
+                        xs.push(st.value);
+                    }
+                } else if (st.state.position < _st.state.position) {
+                    return _st;
                 } else if (i < min) {
                     return _st;
                 } else {
@@ -238,9 +260,9 @@ else
     /// array parser receives an array of Parser and consumes those parser input sequentially.
     function array(ps) {
         ps = ps.map(asParser);
-        function arrayParser(source) {
+        function arrayParser(state) {
             var values = [];
-            var st = success(source, undefined);
+            var st = success(state, undefined);
             for (var i = 0; i < ps.length; i++) {
                 st = parse(ps[i], st.state);
                 if (!st.success)
@@ -270,8 +292,8 @@ else
         }
         p = asParser(p);
         ps = ps.map(asParser);
-        function headParser(source) {
-            var st = parse(p, source);
+        function headParser(state) {
+            var st = parse(p, state);
             var value = st.value;
             for (var i = 0; i < ps.length && st.success; i++) {
                 st = parse(ps[i], st.state);
@@ -288,8 +310,8 @@ else
             ps[_i] = arguments[_i + 0];
         }
         ps = ps.map(asParser);
-        function tailParser(source) {
-            var st = success(source, undefined);
+        function tailParser(state) {
+            var st = success(state, undefined);
             for (var i = 0; i < ps.length && st.success; i++) {
                 st = parse(ps[i], st.state);
             }
@@ -312,14 +334,12 @@ else
     ///
     function seq(f) {
         assert(f instanceof Function);
-        function seqParser(source) {
-            var st = success(source, undefined);
+        function seqParser(state) {
+            var st = success(state, undefined);
             var lastValue = undefined;
             var context = (function (a) {
                 if (st.success) {
-                    var _a = a instanceof Function ? map(function () {
-                        return a();
-                    }, Parsect.empty) : a;
+                    var _a = asParser(a);
                     st = parse(_a, st.state);
                     lastValue = st.value;
                     return st.value;
@@ -338,6 +358,9 @@ else
                 } });
             Object.defineProperty(context, "peek", { get: function () {
                     return st.state.source.slice(st.state.position, st.state.position + 128);
+                } });
+            Object.defineProperty(context, "tags", { get: function () {
+                    return st.state._path.join(' > ');
                 } });
             Object.defineProperty(context, "value", { get: function () {
                     return st.value;
@@ -430,124 +453,21 @@ else
     }
     Parsect.optional = optional;
 
-    // Special parser constructors /////////////////////////////////////////////////////////////////////////////////////////////
-    function pure(t) {
-        return map(function () {
-            return t;
-        }, Parsect.empty);
-    }
-    Parsect.pure = pure;
-
-    function triable(p) {
-        p = asParser(p);
-        function triableParser(source) {
-            var st = parse(p, source);
-            return st.success ? st : failure(source, st.expected);
-        }
-        return new Parser(triableParser);
-    }
-    Parsect.triable = triable;
-
-    function lookAhead(p) {
-        p = asParser(p);
-        function lookAheadParser(source) {
-            var st = parse(p, source);
-            return st.success ? success(source, st.value) : st;
-        }
-        return new Parser(lookAheadParser);
-    }
-    Parsect.lookAhead = lookAhead;
-
-    function notFollowedBy(p, q) {
-        p = asParser(p);
-        q = asParser(q);
-        function notFollowedByParser(source) {
-            var rep = parse(p, source);
-            if (!rep.success)
-                return rep;
-            var _rep = parse(q, rep.state);
-            return _rep.success ? failure(_rep.state, 'unexpected ' + _rep.value) : rep;
-        }
-        return new Parser(notFollowedByParser);
-    }
-    Parsect.notFollowedBy = notFollowedBy;
-
-    function map(f, p) {
-        p = asParser(p);
-        function mapParser(source) {
-            var st = parse(p, source);
-            return st.success ? success(st.state, f(st.value)) : st;
-        }
-        return new Parser(mapParser);
-    }
-    Parsect.map = map;
-
-    function lazy(f) {
-        assert(f instanceof Function);
-        function lazyParser(source) {
-            return parse(f(), source);
-        }
-        return new Parser(lazyParser);
-    }
-    Parsect.lazy = lazy;
-
-    function apply(func) {
-        var ps = [];
-        for (var _i = 0; _i < (arguments.length - 1); _i++) {
-            ps[_i] = arguments[_i + 1];
-        }
-        assert(func instanceof Function);
-        return map(function (xs) {
-            return func.apply(undefined, xs);
-        }, array(ps));
-    }
-    Parsect.apply = apply;
-
-    function skipMany(p) {
-        function skipManyParser(state) {
-            while (true) {
-                var rep = parse(p, state);
-                if (!rep.success)
-                    break;
-                state = rep.state;
-            }
-            return success(state, undefined);
-        }
-        return new Parser(skipManyParser);
-    }
-    Parsect.skipMany = skipMany;
-
-    function skipMany1(p) {
-        return tail(p, skipMany(p));
-    }
-    Parsect.skipMany1 = skipMany1;
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Build-in Parsees /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    Parsect.eof = new Parser(function (source) {
-        return source.position === source.source.length ? success(source.seek(1), undefined) : failure(source, undefined);
+    Parsect.eof = new Parser(function (state) {
+        return state.position === state.source.length ? success(state.seek(1), undefined) : failure(state, "end of file");
     });
-    Parsect.empty = new Parser(function (source) {
-        return success(source, undefined);
+    Parsect.empty = new Parser(function (state) {
+        return success(state, undefined);
     });
-    Parsect.number = map(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
+    Parsect.number = fmap(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
 
     function fail(message) {
-        return new Parser(function (source) {
-            return failure(source, message);
+        return new Parser(function (state) {
+            return failure(state, message);
         });
     }
     Parsect.fail = fail;
-
-    function tag(name, parser) {
-        parser = asParser(parser);
-        return new Parser(function (source) {
-            var result = parse(parser, source.pushTag(name));
-            return result.success ? success(result.state.popTag(), result.value) : result;
-        });
-    }
-    Parsect.tag = tag;
 
     function unexpected(message) {
         function unexpectedParser(state) {
@@ -557,9 +477,115 @@ else
     }
     Parsect.unexpected = unexpected;
 
+    function skipMany(p) {
+        return fmap(function (_) {
+            return undefined;
+        }, many(p));
+    }
+    Parsect.skipMany = skipMany;
+
+    function skipMany1(p) {
+        return tail(p, skipMany(p));
+    }
+    Parsect.skipMany1 = skipMany1;
+
+    function apply(func) {
+        var ps = [];
+        for (var _i = 0; _i < (arguments.length - 1); _i++) {
+            ps[_i] = arguments[_i + 1];
+        }
+        assert(func instanceof Function);
+        return fmap(function (xs) {
+            return func.apply(undefined, xs);
+        }, array(ps));
+    }
+    Parsect.apply = apply;
+
+    function tag(name, parser) {
+        parser = asParser(parser);
+        return new Parser(function (state) {
+            var result = parse(parser, state.pushTag(name));
+            return result.success ? success(result.state.popTag(), result.value) : result;
+        });
+    }
+    Parsect.tag = tag;
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Primitive parsers (Text.Parsec.Prim) ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    function label(message, p) {
+        p = asParser(p);
+        function labelParser(state) {
+            var reply = parse(p, state);
+            return ((!reply.success) && reply.state.position === state.position) ? failure(state, message) : reply;
+        }
+        return new Parser(labelParser);
+    }
+    Parsect.label = label;
+
+    function lookAhead(p) {
+        p = asParser(p);
+        function lookAheadParser(state) {
+            var st = parse(p, state);
+            return st.success ? success(state, st.value) : st;
+        }
+        return new Parser(lookAheadParser);
+    }
+    Parsect.lookAhead = lookAhead;
+
+    function pure(t) {
+        return fmap(function () {
+            return t;
+        }, Parsect.empty);
+    }
+    Parsect.pure = pure;
+
+    function triable(p) {
+        p = asParser(p);
+        function triableParser(state) {
+            var st = parse(p, state);
+            return st.success ? st : failure(state, st.expected);
+        }
+        return new Parser(triableParser);
+    }
+    Parsect.triable = triable;
+
+    function notFollowedBy(p) {
+        p = asParser(p);
+        function notFollowedByParser(state) {
+            var rep = parse(p, state);
+            return rep.success ? failure(state, 'not ' + rep.value) : success(state, undefined);
+        }
+        return new Parser(notFollowedByParser);
+    }
+    Parsect.notFollowedBy = notFollowedBy;
+
+    function fmap(f, p) {
+        p = asParser(p);
+        function mapParser(state) {
+            var st = parse(p, state);
+            return st.success ? success(st.state, f(st.value)) : st;
+        }
+        return new Parser(mapParser);
+    }
+    Parsect.fmap = fmap;
+
+    function lazy(f) {
+        assert(f instanceof Function);
+        function lazyParser(state) {
+            return parse(f(), state);
+        }
+        return new Parser(lazyParser);
+    }
+    Parsect.lazy = lazy;
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Charactor parser constructor /////////////////////////////////////////////////////////////////////////////////////////////////
+    // Charactor parser constructor (Text.Parsec.Char) /////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function oneOf(chars) {
         return satisfy(function (c) {
             return chars.indexOf(c) >= 0;
@@ -585,7 +611,16 @@ else
     Parsect.digit = regexp(/^[0-9]/);
     Parsect.hexDigit = regexp(/^[0-9a-fA-F]/);
     Parsect.octDigit = regexp(/^[0-7]/);
-    Parsect.char = satisfy(function (_) {
+
+    function char(c) {
+        assert(c && c.length === 1);
+        return satisfy(function (_c) {
+            return c === _c;
+        });
+    }
+    Parsect.char = char;
+
+    Parsect.anyChar = satisfy(function (_) {
         return true;
     });
 
@@ -603,14 +638,15 @@ else
             return cs;
         }
         function satisfyParser(s) {
-            var c = s.source[s.position];
-            var i = s.source.charCodeAt(s.position);
-            if (condition(c, i)) {
-                return success(s.seek(1), c);
-            } else {
-                var cs = expectedChars();
-                return failure(s, (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"");
+            if (s.position < s.source.length) {
+                var c = s.source[s.position];
+                var i = s.source.charCodeAt(s.position);
+                if (condition(c, i)) {
+                    return success(s.seek(1), c);
+                }
             }
+            var cs = expectedChars();
+            return failure(s, (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"");
         }
         return new Parser(satisfyParser);
     }
@@ -667,27 +703,6 @@ else
     }
     Parsect.charCode = charCode;
 
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Token parser builder
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////
-    var LanguageDef = (function () {
-        function LanguageDef(commentStart, commentEnd, commentLine, nestedComments, identStart, identLetter, opStart, opLetter, reservedNames, reservedOpNames, caseSensitive) {
-            this.commentStart = commentStart;
-            this.commentEnd = commentEnd;
-            this.commentLine = commentLine;
-            this.nestedComments = nestedComments;
-            this.identStart = identStart;
-            this.identLetter = identLetter;
-            this.opStart = opStart;
-            this.opLetter = opLetter;
-            this.reservedNames = reservedNames;
-            this.reservedOpNames = reservedOpNames;
-            this.caseSensitive = caseSensitive;
-        }
-        return LanguageDef;
-    })();
-    Parsect.LanguageDef = LanguageDef;
-
     function makeTokenParser(def) {
         /////////////////////////////////////////////////////////////////////////////////////////
         // White space & symbols
@@ -709,9 +724,9 @@ else
 
         var oneLineComment = seq(function (s) {
             s(triable(string(def.commentLine)));
-            skipMany(satisfy(function (x) {
+            s(skipMany(satisfy(function (x) {
                 return x != '\n';
-            }));
+            })));
             return undefined;
         });
         var multiLineComment = seq(function (s) {
@@ -721,9 +736,8 @@ else
         var startEnd = (def.commentEnd + def.commentStart).split('').filter(function (x, i, xs) {
             return xs.indexOf(x) === i;
         }).join("");
-        var inCommentMulti = or(seq(function (s) {
+        var inCommentMulti = label("end of comment", or(seq(function (s) {
             s(triable(string(def.commentEnd)));
-            return undefined;
         }), seq(function (s) {
             s(multiLineComment);
             s(inCommentMulti);
@@ -733,17 +747,16 @@ else
         }), seq(function (s) {
             s(oneOf(startEnd));
             s(inCommentMulti);
-        }));
-        var inCommentSingle = or(seq(function (s) {
+        })));
+        var inCommentSingle = label("end of comment", or(seq(function (s) {
             s(triable(string(def.commentEnd)));
-            return undefined;
         }), seq(function (s) {
             s(skipMany1(noneOf(startEnd)));
-            return s(inCommentSingle);
+            s(inCommentSingle);
         }), seq(function (s) {
             s(oneOf(startEnd));
-            return s(inCommentSingle);
-        }));
+            s(inCommentSingle);
+        })));
         var inComment = def.nestedComments ? inCommentMulti : inCommentSingle;
         var simpleSpace = skipMany1(oneOf(" \t\r\n"));
         var whiteSpace = noLine && noMulti ? skipMany(simpleSpace) : noLine ? skipMany(or(simpleSpace, multiLineComment)) : noMulti ? skipMany(or(simpleSpace, oneLineComment)) : skipMany(or(simpleSpace, oneLineComment, multiLineComment));
@@ -752,7 +765,11 @@ else
         // Operators & reserved ops
         ////////////////////////////////////////////////////////////////////////////////////////
         function reservedOp(name) {
-            return lexeme(triable(notFollowedBy(string(name), def.opLetter)));
+            return lexeme(triable(seq(function (s) {
+                var n = s(string(name));
+                s(notFollowedBy(def.opLetter));
+                return n;
+            })));
         }
 
         var operator = lexeme(triable(seq(function (s) {
@@ -774,7 +791,11 @@ else
         // Identifiers & Reserved words
         /////////////////////////////////////////////////////////////////////////////////////////
         function reserved(name) {
-            return lexeme(triable(notFollowedBy(string(name, def.caseSensitive), def.identLetter)));
+            return lexeme(triable(label("end of " + name, seq(function (s) {
+                var n = s(string(name, def.caseSensitive));
+                s(notFollowedBy(def.identLetter));
+                return n;
+            }))));
         }
 
         var identifier = lexeme(triable(seq(function (s) {
@@ -786,13 +807,11 @@ else
             }
         })));
 
-        var ident = seq(function (s) {
+        var ident = label("identifier", seq(function (s) {
             var c = s(def.identStart);
             var cs = s(Join.many(def.identLetter));
-            return s(function () {
-                return c + cs;
-            });
-        });
+            return s.success && (c + cs);
+        }));
 
         var theReservedNames = def.caseSensitive ? def.reservedNames : def.reservedNames.map(function (n) {
             return n.toLowerCase();
@@ -802,11 +821,6 @@ else
             var caseName = def.caseSensitive ? name : name.toLowerCase();
             return theReservedNames.indexOf(caseName) >= 0;
         }
-
-        ////////////////////////////////////////////////////////////////////////////////
-        // Numbers
-        /////////////////////////////////////////////////////////////////////////////
-        var float = lexeme(Parsect.number);
 
         ////////////////////////////////////////////////////////////////////////////////
         // Bracketing
@@ -863,10 +877,114 @@ else
             return (c != "'") && (c != "\\") && (i > 26);
         });
         var charEscape = tail(string('\\'), escapeCode);
-        var characterChar = or(charLetter, charEscape);
-        var charLiteral = lexeme(between(string('\''), characterChar, string('\'')));
+        var characterChar = label("literal character", or(charLetter, charEscape));
+        var charLiteral = label("character", lexeme(between(string('\''), characterChar, label("end of character", string('\'')))));
 
-        var stringLiteral = lexeme(/"(\\[rn"]|[^"])"/);
+        var escapeEmpty = string('&');
+        var escapeGap = tail(many1(Parsect.space), label("end of string gap", string('\\')));
+        var stringEscape = tail(string('\\'), or(tail(escapeGap, pure(null)), tail(escapeEmpty, pure(null)), escapeCode));
+        var stringLetter = satisfy(function (c, i) {
+            return (c != '"') && (c != '\\') && (i > 26);
+        });
+        var stringChar = label("string character", or(stringLetter, stringEscape));
+        var stringLiteral = label("literal string", lexeme(fmap(function (xs) {
+            return xs.join('');
+        }, between(string('"'), many(stringChar), label("end of string", string('"'))))));
+
+        // integers and naturals
+        function number(base, baseDigit) {
+            assert(!!baseDigit);
+            return fmap(function (xs) {
+                return xs.reduce(function (x, d) {
+                    return base * x + parseInt(d);
+                }, 0);
+            }, many1(baseDigit));
+        }
+
+        var decimal = number(10, Parsect.digit);
+        var hexadecimal = tail(oneOf("xX"), number(16, Parsect.hexDigit));
+        var octal = tail(oneOf("oO"), number(8, Parsect.octDigit));
+        var zeroNumber = label("", tail(string('0'), or(hexadecimal, octal, decimal, pure(0))));
+        var nat = or(zeroNumber, decimal);
+        var sign = or(tail(string('-'), pure(function (x) {
+            return -x;
+        })), tail(string('+'), pure(function (x) {
+            return x;
+        })), function (x) {
+            return x;
+        });
+        var int = seq(function (s) {
+            var f = s(lexeme(sign));
+            var n = s(nat);
+            return s.success ? f(n) : undefined;
+        });
+
+        //  -- floats
+        var exponent$ = label("exponent", seq(function (s) {
+            function power(e) {
+                return e < 0 ? 1.0 / power(-e) : (10 ^ e);
+            }
+            s(oneOf("eE"));
+            var f = s(sign);
+            var e = s(label("exponent", decimal));
+            return s.success ? power(f(e)) : undefined;
+        }));
+
+        var fraction = seq(function (s) {
+            s(string('.'));
+            var digits = s(label("fraction", many1(Parsect.digit)));
+            function op(d, f) {
+                return (f + d) / 10.0;
+            }
+            return s.success ? digits.reduce(op, 0.0) : undefined;
+        });
+
+        function fractExponent(n) {
+            return or(seq(function (s) {
+                var fract = s(fraction);
+                var expo = s(option(1.0, exponent$));
+                return s.success ? (n + fract) * expo : undefined;
+            }), seq(function (s) {
+                var expo = s(exponent$);
+                return s.success ? (n * expo) : undefined;
+            }));
+        }
+
+        var floating = seq(function (s) {
+            var n = s(decimal);
+            return s(fractExponent(n));
+        });
+
+        function fractFloat(n) {
+            return fractExponent(n);
+        }
+        var decimalFloat = seq(function (s) {
+            var n = s(decimal);
+            return s(option(n, fractFloat(n)));
+        });
+        var zeroNumFloat = or(or(hexadecimal, octal), decimalFloat, fractFloat(0), pure(0));
+        var natFloat = or(tail(string('0'), zeroNumFloat), decimalFloat);
+        var naturalOrFloat = label("number", lexeme(natFloat));
+        var float = label("float", lexeme(floating));
+        var integer = label("integer", lexeme(int));
+        var natural = label("natural", lexeme(nat));
+
+        // misc
+        function opBinary(name, fun, assoc) {
+            return infix(fmap(function (_) {
+                return fun;
+            }, reservedOp(name)), assoc);
+        }
+        function opPrefix(name, fun) {
+            return prefix(fmap(function (_) {
+                return fun;
+            }, reservedOp(name)));
+        }
+        function opPostfix(name, fun) {
+            return postfix(fmap(function (_) {
+                return fun;
+            }, reservedOp(name)));
+        }
 
         return {
             identifier: identifier,
@@ -875,13 +993,13 @@ else
             reservedOp: reservedOp,
             charLiteral: charLiteral,
             stringLiteral: stringLiteral,
-            //natural: natural,
-            //integer: integer,
+            natural: natural,
+            integer: integer,
             float: float,
-            //naturalOrFloat: naturalOrFloat,
-            //decimal: decimal,
-            //hexadecimal: hexadecimal,
-            //octal: octal,
+            naturalOrFloat: naturalOrFloat,
+            decimal: decimal,
+            hexadecimal: hexadecimal,
+            octal: octal,
             symbol: symbol,
             lexeme: lexeme,
             whiteSpace: whiteSpace,
@@ -897,14 +1015,19 @@ else
             semiSep: semiSep,
             semiSep1: semiSep1,
             commaSep: commaSep,
-            commaSep1: commaSep1
+            commaSep1: commaSep1,
+            binary: opBinary,
+            prefix: opPrefix,
+            postfix: opPostfix
         };
     }
     Parsect.makeTokenParser = makeTokenParser;
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Expression Parser
-    /////////////////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Expression Parser (Text.Parsec.Expr) /////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     (function (Assoc) {
         Assoc[Assoc["None"] = 0] = "None";
         Assoc[Assoc["Left"] = 1] = "Left";
@@ -948,7 +1071,9 @@ else
             case Assoc.None:
                 return new NAssoc(p);
             case Assoc.Left:
-                return new LAssoc(p);
+                return new LAssoc(seq(function (s) {
+                    return s(p);
+                }));
             case Assoc.Right:
                 return new RAssoc(p);
         }
@@ -1055,20 +1180,22 @@ else
 
             return seq(function (s) {
                 var x = s(termP);
-                return s(or(rassocP(x), lassocP(x), nassocP(x), pure(x)));
+                return s.success ? s(label("operator", or(rassocP(x), lassocP(x), nassocP(x), pure(x)))) : undefined;
             });
         }, simpleExpr);
     }
     Parsect.buildExpressionParser = buildExpressionParser;
 
-    ////////////////////////////////////////////////////////////////////
-    // Util ////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Util //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function breakPoint(parser) {
         parser = asParser(parser);
-        function breakPointParser(source) {
+        function breakPointParser(state) {
             debugger;
-            return parse(parser, source);
+            return parse(parser, state);
         }
         return new Parser(breakPointParser);
     }
@@ -1077,13 +1204,13 @@ else
     function log(f) {
         assert(f instanceof Function);
         var count = 0;
-        function logParser(source) {
-            var pos = Math.floor(source.position / source.source.length);
+        function logParser(state) {
+            var pos = Math.floor(state.position / state.source.length);
             if (pos > count) {
                 count = pos;
                 f(count);
             }
-            return success(source, undefined);
+            return success(state, undefined);
         }
         ;
         return new Parser(logParser);
@@ -1099,6 +1226,10 @@ else
     /// Compare two jsons
     function jsonEq(a, b) {
         if ((typeof a === "boolean") || (typeof b === "boolean") || (typeof a === "string") || (typeof b === "string") || (typeof a === "number") || (typeof b === "number") || (typeof a === "undefined") || (typeof b === "undefined") || (a === null) || (b === null)) {
+            return a === b;
+        } else if (a instanceof Function || b instanceof Function) {
+            throw new Error();
+        } else if (a instanceof RegExp || b instanceof RegExp) {
             return a === b;
         } else if (a instanceof Array || b instanceof Array) {
             var xs = a, ys = b;
@@ -1120,37 +1251,37 @@ else
 
     (function (Join) {
         function many(p) {
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.many(p));
         }
         Join.many = many;
         function many1(p) {
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.many1(p));
         }
         Join.many1 = many1;
         function sepBy1(p, q) {
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.sepBy1(p, q));
         }
         Join.sepBy1 = sepBy1;
         function sepByN(m, n, p, q) {
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.sepByN(m, n, p, q));
         }
         Join.sepByN = sepByN;
         function repeat(m, n, p) {
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.repeat(m, n, p));
         }
         Join.repeat = repeat;
         function array(ps) {
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.array(ps));
         }
@@ -1160,7 +1291,7 @@ else
             for (var _i = 0; _i < (arguments.length - 0); _i++) {
                 ps[_i] = arguments[_i + 0];
             }
-            return Parsect.map(function (x) {
+            return Parsect.fmap(function (x) {
                 return x.join('');
             }, Parsect.array(ps));
         }

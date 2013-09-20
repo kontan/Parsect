@@ -473,8 +473,16 @@ module mail {
     // General-address-literal  = Standardized-tag ":" 1*dcontent
     var General_address_literal: p.Parser<string> = j.series(Standardized_tag, ":", j.many1(dcontent));
 
-    var __ipv6s_segment6 = j.series(IPv6_hex, j.repeat(0, 5, p.triable(p.tail(":", p.notFollowedBy(IPv6_hex, ".")))));
-    var __ipv6s_segment4 = j.series(IPv6_hex, j.repeat(0, 3, p.triable(p.tail(":", p.notFollowedBy(IPv6_hex, ".")))));
+    var __ipv6s_segment6 = j.series(IPv6_hex, j.repeat(0, 5, p.triable(p.tail(":", p.seq((s: p.Context<string,void>)=>{
+        var n = s(IPv6_hex);
+        s(p.notFollowedBy("."));
+        return n;
+    })))));
+    var __ipv6s_segment4 = j.series(IPv6_hex, j.repeat(0, 3, p.triable(p.tail(":", p.seq((s: p.Context<string,void>)=>{
+        var n = s(IPv6_hex);
+        p.notFollowedBy(".");
+        return n;
+    })))));
 
     // IPv6-comp      = [IPv6-hex *5(":" IPv6-hex)] "::"
     //                  [IPv6-hex *5(":" IPv6-hex)]

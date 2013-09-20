@@ -2,3 +2,4 @@
 src/parsect.ts
 test/test.ts
 test/mail.ts
+example/bancha/bancha.ts
