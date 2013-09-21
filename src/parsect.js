@@ -1148,7 +1148,7 @@ else
                     var f = s(rassocOp);
                     var y = s(seq(function (s) {
                         var z = s(termP);
-                        return rassocP1(z);
+                        return s(rassocP1(z));
                     }));
                     return s.success ? f(x, y) : undefined;
                 }), ambigiousLeft, ambigiousNon);

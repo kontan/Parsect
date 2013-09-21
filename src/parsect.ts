@@ -1153,8 +1153,8 @@ module Parsect {
             var ambigiousNon      = ambigious("non", nassocOp);
 
             var termP = seq(s=>{
-                var pre = s(prefixP);
-                var x = s(term);
+                var pre  = s(prefixP);
+                var x    = s(term);
                 var post = s(postfixP);
                 return s.success ? post(pre(x)) : undefined;
             });
@@ -1165,7 +1165,7 @@ module Parsect {
                 return or(
                     seq(s=>{
                         var f: (a: A, b: A)=>A = s(rassocOp);
-                        var y: A = s(seq(s=>{ var z = s(termP); return rassocP1(z); }));
+                        var y: A = s(seq(s=>{ var z = s(termP); return s(rassocP1(z)); }));
                         return s.success ? f(x, y) : undefined;
                     }),
                     ambigiousLeft,
