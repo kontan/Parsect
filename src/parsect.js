@@ -73,16 +73,19 @@ var Parsect;
         State.prototype.seek = function (count) {
             return new State(this.source, this.position + count, this._userState, this._path);
         };
+
         State.prototype.pushTag = function (tag) {
             var _path_ = this._path.slice(0);
             _path_.push(tag);
             return new State(this.source, this.position, this._userState, _path_);
         };
+
         State.prototype.popTag = function () {
             var _path_ = this._path.slice(0);
             _path_.shift();
             return new State(this.source, this.position, this._userState, _path_);
         };
+
         State.prototype.equals = function (src) {
             return src && this.source === src.source && this.position === src.position && jsonEq(this._userState, src._userState);
         };
@@ -141,17 +144,13 @@ var Parsect;
     })();
     Parsect.Parser = Parser;
 
-    function parse(parser, source) {
-        if (source instanceof State)
-            ;
-else if (typeof source === "string")
-            source = new State(source);
-else if (source instanceof String)
-            source = new State(source);
-else
-            throw new Error();
-        var parser = asParser(parser);
-        return parser.runParser(source);
+    /// Parse an input.
+    /// This function acceps string primitive value as string parser or RegExp object as regexp parser.
+    /// @param parser parser.
+    /// @param state state.
+    /// @return the result of parssing.
+    function parse(parser, state) {
+        return parser.runParser(state);
     }
     Parsect.parse = parse;
 
@@ -160,10 +159,10 @@ else
             return pattern;
 else if (pattern instanceof String)
             return string(pattern);
-else if (pattern instanceof RegExp)
-            return regexp(pattern);
 else if (typeof pattern === "string")
             return string(pattern);
+else if (pattern instanceof RegExp)
+            return regexp(pattern);
 else if (pattern instanceof Array)
             return array(pattern);
 else if (pattern instanceof Function)
@@ -660,7 +659,6 @@ else
         function stringParser(s) {
             var slice = s.source.slice(s.position, s.position + text.length);
             return text === (caseSensitive ? slice : slice.toLowerCase()) ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
-            //return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser(stringParser);
     }

@@ -591,7 +591,7 @@ module mail {
     export function validate(address: string): boolean {
         if(address.length >= 257) return false;
         var parser = Mailbox;
-        var result = p.parse(p.seq(s=>{ s(parser);  s(p.eof); }), address);
+        var result = p.parse(p.seq(s=>{ s(parser);  s(p.eof); }), new p.State(address, 0));
         console.log(result.value);
         return result.success;
     }

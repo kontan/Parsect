@@ -9,15 +9,15 @@ module Tests {
         return ss.join();
     }
 
-    function parse<A,U>(parser: p.Parser<A>, source: string  ): p.Reply<A,U>;
-    function parse<A,U>(parser: p.Parser<A>, source: p.State<U>): p.Reply<A,U>;
-    function parse<A,U>(parser: p.Parser<A>, source: any     ): p.Reply<A,U> {
-             if(source instanceof p.State  ) ;
-        else if(typeof source === "string") source = new p.State(source);
-        else if(source instanceof String  ) source = new p.State(source);
+    function parse<A,U>(parser: p.Parser<A>, state: string  ): p.Reply<A,U>;
+    function parse<A,U>(parser: p.Parser<A>, state: p.State<U>): p.Reply<A,U>;
+    function parse<A,U>(parser: p.Parser<A>, state: any     ): p.Reply<A,U> {
+             if(state instanceof p.State  ) ;
+        else if(typeof state === "string") state = new p.State(state);
+        else if(state instanceof String  ) state = new p.State(state);
         else throw new Error();
         var parser = <any>p.asParser(parser);
-        return p.parse(parser, source);
+        return p.parse(parser, state);
     }    
 
     test("State object instantiation and equation", function() {

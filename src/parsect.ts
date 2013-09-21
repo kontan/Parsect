@@ -40,8 +40,12 @@ module Parsect {
     // Data Type Definitions ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     
-    export class State<U> { 
+    export class State<U> {
+
         rawColumn: { raw: number; column: number; };
+
+        path: string;
+    
         constructor(public source: string, public position: number = 0, public _userState?: U, public _path: string[] = []){    
             assert(typeof source !== "undefined");
             assert(source !== null);
@@ -61,20 +65,23 @@ module Parsect {
                 return { raw: raw, column: column };
             }});
         }
-        path: string;
+
         seek(count: number): State {
             return new State(this.source, this.position + count, this._userState, this._path);
         }
+
         pushTag(tag: string): State {
             var _path_ = this._path.slice(0);
             _path_.push(tag);
             return new State(this.source, this.position, this._userState, _path_);
         }
+
         popTag(): State {
             var _path_ = this._path.slice(0);
             _path_.shift();
             return new State(this.source, this.position, this._userState, _path_);
         }
+
         equals(src: State<U>): boolean {
             return src && this.source === src.source && this.position === src.position && jsonEq(this._userState, src._userState);
         }
@@ -124,33 +131,26 @@ module Parsect {
     /// Parse an input.
     /// This function acceps string primitive value as string parser or RegExp object as regexp parser.
     /// @param parser parser.
-    /// @param source source.
+    /// @param state state.
     /// @return the result of parssing.
-    export function parse<A,U>(parser: Parser<A>, source: string  ): Reply<A,U>;
-    export function parse<A,U>(parser: Parser<A>, source: State<U>): Reply<A,U>;
-    export function parse<A,U>(parser: Parser<A>, source: any     ): Reply<A,U> {
-             if(source instanceof State  ) ;
-        else if(typeof source === "string") source = new State(source);
-        else if(source instanceof String  ) source = new State(source);
-        else throw new Error();
-        var parser = <any>asParser(parser);
-        return parser.runParser(source);
+    export function parse<A,U>(parser: Parser<A>, state: State<U>): Reply<A,U> {
+        return parser.runParser(state);
     }
 
     // convert a argument into a string parser.
     // *HACK* ... It returns Parser<T> or Function! 
-    export function asParser(pattern: Parser<string>    ): Parser<string> ;
-    export function asParser(pattern: string            ): Parser<string> ;
-    export function asParser(pattern: RegExp            ): Parser<string> ;
-    export function asParser<T>(pattern: ()=>Parser<T>  ): Parser<T> ;
-    export function asParser<T>(pattern: Parser<T>[]    ): Parser<T[]   > ;
-    export function asParser(pattern: any               ): Parser<any   > {
+    export function asParser   (pattern: Parser<string>): Parser<string> ;
+    export function asParser   (pattern: string        ): Parser<string> ;
+    export function asParser   (pattern: RegExp        ): Parser<string> ;
+    export function asParser<A>(pattern: ()=>Parser<A> ): Parser<A     > ;
+    export function asParser<A>(pattern: Parser<A>[]   ): Parser<A[]   > ;
+    export function asParser   (pattern: any           ): Parser<any   > {
              if(pattern instanceof Parser  ) return pattern;
         else if(pattern instanceof String  ) return string(pattern);
+        else if(typeof pattern === "string") return string(pattern);        
         else if(pattern instanceof RegExp  ) return regexp(pattern);
-        else if(typeof pattern === "string") return string(pattern);
-        else if(pattern instanceof Array   ) return array(pattern);
-        else if(pattern instanceof Function) return lazy(pattern); 
+        else if(pattern instanceof Array   ) return array (pattern);
+        else if(pattern instanceof Function) return lazy  (pattern); 
         else throw new Error();
     }
 
@@ -622,11 +622,8 @@ module Parsect {
         assert(typeof text === "string" || <String>text instanceof String)
         text = caseSensitive ? text : text.toLowerCase(); 
         function stringParser<U>(s: State<U>): Reply<string,U> {
-
             var slice = s.source.slice(s.position, s.position + text.length);
             return text === (caseSensitive ? slice : slice.toLowerCase()) ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
-
-            //return s.source.indexOf(text, s.position) === s.position ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
         }
         return new Parser<string>(stringParser);
     }
