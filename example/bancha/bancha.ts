@@ -13,7 +13,7 @@ module bancha {
             identLetter:        /[_$a-zA-Z0-9]/,
             opStart:            /[+\-*\/=!$%&\^~@?_><:|\\.]/,
             opLetter:           /[+\-*\/=!$%&\^~@?_><:|\\.]/,
-            reservedNames:      ["def", "return", "operator", "infix", "infixl", "infixr", "prefix", "postfix", "var"],
+            reservedNames:      ["def", "return", "operator", "infix", "infixl", "infixr", "prefix", "postfix", "var", "if", "else"],
             reservedOpNames:    [],
             caseSensitive:      true
         });
@@ -56,6 +56,7 @@ module bancha {
                 return s.success && ["var ", name, "=", e, ";"].join('');
             });
 
+
             var returnStatement = p.fmap((e: string)=>"return "+e+";", p.between(lexer.reserved("return"), expr, lexer.semi));
 
             var operatorStatement = p.seq(s=>{
@@ -79,15 +80,30 @@ module bancha {
                 return "";
             });
 
+            var ifStatement = p.seq(s=>{
+                s(lexer.reserved("if"));
+                var condition = s(lexer.parens(expr));
+                var thenClause = s(block);
+                var elseClause = s(p.option("", p.seq(s=>{
+                    s(lexer.reserved("else"));
+                    return "else" + s(p.or(block, ifStatement));
+                })));
+                return "if(" + condition + ")" + thenClause + elseClause;
+            });
+
             var func = p.seq(s=>{
                 s(lexer.reserved("def"));
                 var name = s(lexer.identifier);
                 var args = s(lexer.parens(p.sepBy(lexer.identifier, lexer.comma)));
-                var body = s(lexer.braces(p.many(p.or(func, returnStatement, varStatement, exprStatement))));
+                var body = s(lexer.braces(p.many(statement)));
                 return s.success && ["function ", name, "(", args.join(','), "){", body.join(""), "}"].join('');
             });
 
-            return p.or(func, operatorStatement, varStatement, exprStatement);
+            var statement = p.or(func, returnStatement, ifStatement, varStatement, exprStatement);
+
+            var block = p.or(p.fmap(xs=>"{" + xs.join('') + "}", lexer.braces(p.many(statement))), expr);
+
+            return p.or(func, operatorStatement, ifStatement, varStatement, exprStatement);
         }
 
         var topLevelStatement = buildStatementParser();

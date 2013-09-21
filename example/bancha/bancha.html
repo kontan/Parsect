@@ -30,7 +30,6 @@
                 width: 100%;
                 height: 600px;
                 font-style: monospace;
-                font-size: small;
                 color: rgb(53, 37, 29);
                 background-color: rgb(222, 235, 222);
                 background-image: url("tatami01.jpg");
@@ -51,23 +50,21 @@
         <h1>BanchaScript Playground</h1>
         <section class="left">
 
-<textarea id="source">// 関数呼び出し
-log(1 + 2 * 42);
-
-// 変数
+<textarea id="source">
+// 変数の宣言
 var x = 1 + 2 * 3;
 
 // 関数の定義
 def factorial(k){
-    def t(){
-        return k * factorial(k - 1);
-    }
-    def f(){
+    // if 文
+    if(k < 1){
         return 1;
+    }else{
+        return k * factorial(k - 1);   
     }
-    return cond(k > 1, t, f);
 }
 
+// 関数呼び出し
 log(factorial(10));
 
 // 演算子の定義
