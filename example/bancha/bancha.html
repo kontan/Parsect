@@ -29,7 +29,7 @@
             textarea {
                 width: 100%;
                 height: 600px;
-                font-style: monospace;
+                font-family: monospace;
                 color: rgb(53, 37, 29);
                 background-color: rgb(222, 235, 222);
                 background-image: url("tatami01.jpg");
@@ -50,20 +50,54 @@
         <h1>BanchaScript Playground</h1>
         <section class="left">
 
+<textarea id="lib" style="display: none;">
+operator ++ prefix  1 = "++{0}"; 
+operator -- prefix  1 = "--{0}";
+operator ++ postfix 1 = "{0}++";
+operator -- postfix 1 = "{0}--";
+operator -  prefix  1 = "-{0}";
+operator +  prefix  1 = "+{0}";
+
+operator *  infixl  2 = "({0}*{1})"; 
+operator /  infixl  2 = "({0}/{1})";
+
+operator +  infixl  3 = "({0}+{1})";
+operator -  infixl  3 = "({0}-{1})";
+
+operator &lt; infixl 5 = "({0}&lt;{1})";
+operator &gt; infixl 5 = "({0}&gt;{1})";
+operator &lt;= infixl 5 = "({0}&lt;={1})";
+operator &gt;= infixl 5 = "({0}&gt;={1})";
+
+operator == infixl  5 = "({0}=={1})";
+operator != infixl  5 = "({0}!={1})";
+
+operator := infixl 14 = "{0}={1}";
+</textarea>
+
+
+
 <textarea id="source">
-// for文
-for(x; y; z){
-    x;
+
+// 関数の定義
+function log(x){
+
+    // nativeディレクティブ
+    native "console.log(x)";
 }
-    
-operator =+= infixr 5 = add;
-y =+= x;
+
+// for文
+var m = 0;
+for(var i = 0; i < 10; i++){
+    m := m + i;
+}
+log(m);
 
 // 変数の宣言
 var x = 1 + 2 * 3;
 
 // 関数の定義
-def factorial(k){
+function factorial(k){
     // if 文
     if(k < 1){
         return 1;
@@ -71,8 +105,6 @@ def factorial(k){
         return k * factorial(k - 1);   
     }
 }
-
-
 
 // 関数呼び出し
 log(factorial(10));
@@ -84,7 +116,20 @@ operator |^_^|< prefix 5 = log;
 |^_^|< "わたしです";
 
 // ネストできるブロックコメント
-/* This's /* comment */ text. */</textarea>
+/* This's /* comment */ text. */
+
+// 関数の部分適用 ///////////////////////////
+function add(x, y){
+    return x + y;
+}
+
+// 先にふたつめの引数を渡す
+var f = add(,10);
+
+// 後から残りの引数を渡す
+log(f(20));
+
+</textarea>
         
         </section>
 
@@ -100,29 +145,29 @@ operator |^_^|< prefix 5 = log;
         <script src="../../src/parsect.js"></script>
         <script src="bancha.js"></script>
         <script>
+            var lib      = document.getElementById("lib");
             var source   = document.getElementById("source");
             var compiled = document.getElementById("compiled");
             var output   = document.getElementById("output");
             
             function compile(){
                 "use strict";
-                var reply = bancha.compile(source.value);
+                var scope = new bancha.Scope();
+                var stdlib = bancha.compile(scope, lib.value);
+                var reply = bancha.compile(scope, source.value);
                 if(reply.success){
                     error.value = "Compiled successfully.";
                     compiled.value = reply.value;
                     var outputText = "";
                     
-                    try{
-                        function log(v) {
-                            outputText += v + "\n";
+                    (function(){
+                        try{
+                            var console = { log: function(x){ outputText += x + "\n"; }};
+                            eval(reply.value);
+                        }catch(e){
+                            console.log(e);
                         }
-                        function cond(c, t, f){
-                            return c ? t() : f();
-                        }
-                        eval(reply.value);
-                    }catch(e){
-                        console.log(e);
-                    }
+                    }());
 
                     output.value = outputText;
                 }else{

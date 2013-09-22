@@ -325,12 +325,12 @@ module Parsect {
     /// 
     /// @param f コンテキストを実行するコールバック。
     /// 
-    export function seq<T,U>(f: (s: Context<T,U>, o: T)=>void): Parser<T>{
+    export function seq<T,U>(f: (s: Context<T,U>)=>T): Parser<T>{
         assert(f instanceof Function);
         function seqParser<U>(state: State<U>): Reply<T,U> {
-            var st:Reply<T,U> = success(state, undefined);
+            var st: Reply<T,U> = success(state, undefined);
             var lastValue: T = undefined;
-            var context:Context<T,U> = <Context<T,U>> ((a: any)=>{
+            var context: Context<T,U> = <Context<T,U>> ((a: any)=>{
                 if(st.success){
                     var _a: Parser<T> = asParser(a);
                     st = parse(_a, st.state);
@@ -346,10 +346,8 @@ module Parsect {
             Object.defineProperty(context, "peek",      { get: ()=> st.state.source.slice(st.state.position, st.state.position + 128) });
             Object.defineProperty(context, "tags",      { get: ()=> st.state._path.join(' > ') });            
             Object.defineProperty(context, "value",     { get: ()=> st.value });
-            context.out = <T> {};
-            var returnValue: any = f(context, context.out);
-            var value = typeof returnValue !== "undefined" ? returnValue : context.out;
-            return context.success ? (value !== undefined ? success(st.state, value) : st) : st;
+            var value: any = f(context);
+            return context.success ? success(st.state, value) : st;
         }
         return new Parser<T>(seqParser);
     }
@@ -944,7 +942,7 @@ module Parsect {
         var sign = or(
             tail(string('-'), pure((x: number)=>-x)),
             tail(string('+'), pure((x: number)=> x)),
-            x=>x
+            pure((x: number)=>x)
         );
         var int = seq(s=>{
             var f = s(lexeme(sign));
@@ -1290,17 +1288,17 @@ module Parsect {
 }
 
 // *HACK* ... function overload combination hack
-interface String {
-    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<string,U>;
-}
+//interface String {
+//    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<string,U>;
+//}
 
-interface RegExp {
-    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<string,U>;
-}
+//interface RegExp {
+//    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<string,U>;
+//}
 
-interface Function {
-    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<any,U>;
-}
+//interface Function {
+//    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<any,U>;
+//}
 
 // Bug?
 //interface Array {

@@ -364,10 +364,8 @@ else
             Object.defineProperty(context, "value", { get: function () {
                     return st.value;
                 } });
-            context.out = {};
-            var returnValue = f(context, context.out);
-            var value = typeof returnValue !== "undefined" ? returnValue : context.out;
-            return context.success ? (value !== undefined ? success(st.state, value) : st) : st;
+            var value = f(context);
+            return context.success ? success(st.state, value) : st;
         }
         return new Parser(seqParser);
     }
@@ -908,9 +906,9 @@ else
             return -x;
         })), tail(string('+'), pure(function (x) {
             return x;
-        })), function (x) {
+        })), pure(function (x) {
             return x;
-        });
+        }));
         var int = seq(function (s) {
             var f = s(lexeme(sign));
             var n = s(nat);
