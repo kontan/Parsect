@@ -48,7 +48,6 @@ var Parsect;
             this._path = _path;
             assert(typeof source !== "undefined");
             assert(source !== null);
-
             if (position < 0 || position > source.length + 1)
                 throw "_position: out of range: " + position;
             Object.defineProperty(this, "path", { get: function () {
@@ -154,24 +153,6 @@ var Parsect;
     }
     Parsect.parse = parse;
 
-    function asParser(pattern) {
-        if (pattern instanceof Parser)
-            return pattern;
-else if (pattern instanceof String)
-            return string(pattern);
-else if (typeof pattern === "string")
-            return string(pattern);
-else if (pattern instanceof RegExp)
-            return regexp(pattern);
-else if (pattern instanceof Array)
-            return array(pattern);
-else if (pattern instanceof Function)
-            return lazy(pattern);
-else
-            throw new Error();
-    }
-    Parsect.asParser = asParser;
-
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Parser Combinators (Text.Parsec.Combinator) ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,7 +160,7 @@ else
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Choice parser combinators //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function choice(ps) {
-        ps = ps.map(asParser);
+        //ps = ps.map(asParser);
         function choiceParser(state) {
             // For debugging　and efficiency, expand list as loop intentionally.
             var sts = [];
@@ -210,7 +191,7 @@ else
     // Repetitious parser constructors ////////////////////////////////////////////////////////////////////////////////////////
     // repeat:(n:number, m: number, p:Parser<T>):Parser<T[]>
     function repeat(min, max, p) {
-        p = asParser(p);
+        //p = asParser(p);
         function repeatParser(s) {
             // For debugging　and efficiency, expand list as loop intentionally.
             var xs = [];
@@ -258,7 +239,7 @@ else
     // Sequential parser constructors ///////////////////////////////////////////////////////////////////////////////////////
     /// array parser receives an array of Parser and consumes those parser input sequentially.
     function array(ps) {
-        ps = ps.map(asParser);
+        //ps = ps.map(asParser);
         function arrayParser(state) {
             var values = [];
             var st = success(state, undefined);
@@ -289,8 +270,7 @@ else
         for (var _i = 0; _i < (arguments.length - 1); _i++) {
             ps[_i] = arguments[_i + 1];
         }
-        p = asParser(p);
-        ps = ps.map(asParser);
+        //p = asParser(p); ps = ps.map(asParser);
         function headParser(state) {
             var st = parse(p, state);
             var value = st.value;
@@ -303,25 +283,40 @@ else
     }
     Parsect.head = head;
 
-    function tail() {
-        var ps = [];
-        for (var _i = 0; _i < (arguments.length - 0); _i++) {
-            ps[_i] = arguments[_i + 0];
-        }
-        ps = ps.map(asParser);
-        function tailParser(state) {
-            var st = success(state, undefined);
-            for (var i = 0; i < ps.length && st.success; i++) {
-                st = parse(ps[i], st.state);
-            }
-            return st;
-        }
-        return new Parser(tailParser);
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // tail combinator needs overloading but it make a compiler slow down seriously.
+    // Don't use tail parser, use seq combnator instead.
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    /*
+    // tail function takes parsers and apply its sequentially.
+    // This function returns the Reply object that last parser returned.
+    export function tail<T>(                                                                                                         p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>,                                                                                           p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>,                                                                            p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>,                                                             p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>,                                              p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>,                               p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>, f:Parser<any>,                p:Parser<T>):Parser<T>;
+    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>, f:Parser<any>, g:Parser<any>, p:Parser<T>):Parser<T>;
+    export function tail(...ps:Parser<any>[]): any {
+    ps = ps.map(asParser);
+    function tailParser<U>(state:State<U>): Reply<any,U>{
+    var st:Reply<any,U> = success(state, undefined);
+    for(var i = 0; i < ps.length && st.success; i++){
+    st = parse(ps[i], st.state);
     }
-    Parsect.tail = tail;
-
+    return st;
+    }
+    return new Parser(tailParser);
+    }
+    */
     function between(open, p, close) {
-        return tail(open, head(p, close));
+        return seq(function (s) {
+            s(open);
+            var v = s(p);
+            s(close);
+            return v;
+        });
     }
     Parsect.between = between;
 
@@ -338,8 +333,10 @@ else
             var lastValue = undefined;
             var context = (function (a) {
                 if (st.success) {
-                    var _a = asParser(a);
-                    st = parse(_a, st.state);
+                    //var _a: Parser<T> = asParser(a);
+                    //st = parse(_a, st.state);
+                    st = parse(a, st.state);
+
                     lastValue = st.value;
                     return st.value;
                 }
@@ -373,8 +370,7 @@ else
 
     // Alternative parser constructors /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function sepByN(min, max, p, sep) {
-        p = asParser(p);
-        sep = asParser(sep);
+        //p = asParser(p); sep = asParser(sep);
         assert(min <= max);
         function sepByNParser(source) {
             // For debugging　and efficiency, expand list as loop intentionally.
@@ -482,24 +478,29 @@ else
     Parsect.skipMany = skipMany;
 
     function skipMany1(p) {
-        return tail(p, skipMany(p));
+        return seq(function (s) {
+            s(p);
+            s(skipMany(p));
+        });
     }
     Parsect.skipMany1 = skipMany1;
 
-    function apply(func) {
-        var ps = [];
-        for (var _i = 0; _i < (arguments.length - 1); _i++) {
-            ps[_i] = arguments[_i + 1];
-        }
-        assert(func instanceof Function);
-        return fmap(function (xs) {
-            return func.apply(undefined, xs);
-        }, array(ps));
+    // Special parser constructors /////////////////////////////////////////////////////////////////////////////////////////////
+    /*
+    export function apply<A,B,            R>(m: (a: A, b: B                                   )=>R, pa: Parser<A>, pb: Parser<B>                                                                                          ): Parser<R>;
+    export function apply<A,B,C,          R>(m: (a: A, b: B, c: C                             )=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>                                                                           ): Parser<R>;
+    export function apply<A,B,C,D,        R>(m: (a: A, b: B, c: C, d: D                       )=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>                                                            ): Parser<R>;
+    export function apply<A,B,C,D,E,      R>(m: (a: A, b: B, c: C, d: D, e: E                 )=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>                                             ): Parser<R>;
+    export function apply<A,B,C,D,E,F,    R>(m: (a: A, b: B, c: C, d: D, e: E, f: F           )=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>                              ): Parser<R>;
+    export function apply<A,B,C,D,E,F,G,  R>(m: (a: A, b: B, c: C, d: D, e: E, f: F, g: G     )=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>, pg: Parser<G>               ): Parser<R>;
+    export function apply<A,B,C,D,E,F,G,H,R>(m: (a: A, b: B, c: C, d: D, e: E, f: F, g: G, h:H)=>R, pa: Parser<A>, pb: Parser<B>, pc: Parser<C>, pd: Parser<D>, pe: Parser<E>, pf: Parser<F>, pg: Parser<G>, ph: Parser<H>): Parser<R>;
+    export function apply(func: Function, ...ps: Parser<any>[]): Parser<any> {
+    assert(func instanceof Function);
+    return fmap((xs: any[])=>func.apply(undefined, xs), array(ps))
     }
-    Parsect.apply = apply;
-
+    */
     function tag(name, parser) {
-        parser = asParser(parser);
+        //parser = asParser(parser);
         return new Parser(function (state) {
             var result = parse(parser, state.pushTag(name));
             return result.success ? success(result.state.popTag(), result.value) : result;
@@ -513,7 +514,7 @@ else
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function label(message, p) {
-        p = asParser(p);
+        //p = asParser(p);
         function labelParser(state) {
             var reply = parse(p, state);
             return ((!reply.success) && reply.state.position === state.position) ? failure(state, message) : reply;
@@ -523,7 +524,7 @@ else
     Parsect.label = label;
 
     function lookAhead(p) {
-        p = asParser(p);
+        //p = asParser(p);
         function lookAheadParser(state) {
             var st = parse(p, state);
             return st.success ? success(state, st.value) : st;
@@ -540,7 +541,7 @@ else
     Parsect.pure = pure;
 
     function triable(p) {
-        p = asParser(p);
+        //p = asParser(p);
         function triableParser(state) {
             var st = parse(p, state);
             return st.success ? st : failure(state, st.expected);
@@ -550,7 +551,7 @@ else
     Parsect.triable = triable;
 
     function notFollowedBy(p) {
-        p = asParser(p);
+        //p = asParser(p);
         function notFollowedByParser(state) {
             var rep = parse(p, state);
             return rep.success ? failure(state, 'not ' + rep.value) : success(state, undefined);
@@ -560,7 +561,7 @@ else
     Parsect.notFollowedBy = notFollowedBy;
 
     function fmap(f, p) {
-        p = asParser(p);
+        //p = asParser(p);
         function mapParser(state) {
             var st = parse(p, state);
             return st.success ? success(st.state, f(st.value)) : st;
@@ -872,13 +873,28 @@ else
         var charLetter = satisfy(function (c, i) {
             return (c != "'") && (c != "\\") && (i > 26);
         });
-        var charEscape = tail(string('\\'), escapeCode);
+        var charEscape = seq(function (s) {
+            s(string('\\'));
+            return s(escapeCode);
+        });
         var characterChar = label("literal character", or(charLetter, charEscape));
         var charLiteral = label("character", lexeme(between(string('\''), characterChar, label("end of character", string('\'')))));
 
         var escapeEmpty = string('&');
-        var escapeGap = tail(many1(Parsect.space), label("end of string gap", string('\\')));
-        var stringEscape = tail(string('\\'), or(tail(escapeGap, pure(null)), tail(escapeEmpty, pure(null)), escapeCode));
+        var escapeGap = seq(function (s) {
+            s(many1(Parsect.space));
+            return s(label("end of string gap", string('\\')));
+        });
+        var stringEscape = seq(function (s) {
+            s(string('\\'));
+            return s(or(seq(function (s) {
+                s(escapeGap);
+                return s(pure(null));
+            }), seq(function (s) {
+                s(escapeEmpty);
+                return s(pure(null));
+            }), escapeCode));
+        });
         var stringLetter = satisfy(function (c, i) {
             return (c != '"') && (c != '\\') && (i > 26);
         });
@@ -898,15 +914,30 @@ else
         }
 
         var decimal = number(10, Parsect.digit);
-        var hexadecimal = tail(oneOf("xX"), number(16, Parsect.hexDigit));
-        var octal = tail(oneOf("oO"), number(8, Parsect.octDigit));
-        var zeroNumber = label("", tail(string('0'), or(hexadecimal, octal, decimal, pure(0))));
+        var hexadecimal = seq(function (s) {
+            s(oneOf("xX"));
+            return s(number(16, Parsect.hexDigit));
+        });
+        var octal = seq(function (s) {
+            s(oneOf("oO"));
+            return s(number(8, Parsect.octDigit));
+        });
+        var zeroNumber = label("", seq(function (s) {
+            s(string('0'));
+            return s(or(hexadecimal, octal, decimal, pure(0)));
+        }));
         var nat = or(zeroNumber, decimal);
-        var sign = or(tail(string('-'), pure(function (x) {
-            return -x;
-        })), tail(string('+'), pure(function (x) {
-            return x;
-        })), pure(function (x) {
+        var sign = or(seq(function (s) {
+            s(string('-'));
+            return s(pure(function (x) {
+                return -x;
+            }));
+        }), seq(function (s) {
+            s(string('+'));
+            return s(pure(function (x) {
+                return x;
+            }));
+        }), pure(function (x) {
             return x;
         }));
         var int = seq(function (s) {
@@ -959,7 +990,10 @@ else
             return s(option(n, fractFloat(n)));
         });
         var zeroNumFloat = or(or(hexadecimal, octal), decimalFloat, fractFloat(0), pure(0));
-        var natFloat = or(tail(string('0'), zeroNumFloat), decimalFloat);
+        var natFloat = or(seq(function (s) {
+            s(string('0'));
+            return s(zeroNumFloat);
+        }), decimalFloat);
         var naturalOrFloat = label("number", lexeme(natFloat));
         var float = label("float", lexeme(floating));
         var integer = label("integer", lexeme(int));
@@ -1119,7 +1153,10 @@ else
             }));
 
             function ambigious(assoc, op) {
-                return triable(tail(op, fail("ambiguous use of a " + assoc + " associative operator")));
+                return triable(seq(function (s) {
+                    s(op);
+                    return s(fail("ambiguous use of a " + assoc + " associative operator"));
+                }));
             }
 
             var ambigiousRight = ambigious("right", rassocOp);
@@ -1188,7 +1225,7 @@ else
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     function breakPoint(parser) {
-        parser = asParser(parser);
+        //parser = asParser(parser);
         function breakPointParser(state) {
             debugger;
             return parse(parser, state);

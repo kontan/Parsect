@@ -86,6 +86,13 @@ function log(x){
     native "console.log(x)";
 }
 
+// アロー関数式
+var double = x => x * 2;
+
+// 演算子を関数に変換
+var mul = (*);
+log(mul(5, 6));
+
 // for文
 var m = 0;
 for(var i = 0; i < 10; i++){
