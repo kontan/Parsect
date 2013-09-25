@@ -51,6 +51,8 @@ module Parsect {
     // Current parsing state.
     // <U> Type of user state.
     export class State<U> {
+
+        // You can use `state` function instead of `new State`.
         constructor(public source: string, public position: number = 0, public _userState?: U){    
             assert(typeof source !== "undefined");
             assert(source !== null);
@@ -70,13 +72,18 @@ module Parsect {
             return { raw: raw, column: column };
         }
 
-        seek(count: number): State {
-            return new State(this.source, this.position + count, this._userState);
+        seek(delta: number): State {
+            return new State(this.source, this.position + delta, this._userState);
         }
 
         equals(src: State<U>): boolean {
             return src && this.source === src.source && this.position === src.position && jsonEq(this._userState, src._userState);
         }
+    }
+
+    // Create new state object.
+    export function state<U>(source: string, position: number = 0, userState?: U): State<U> {
+        return new State(source, position, userState);
     }
 
     /// Result of parsing.
@@ -135,7 +142,7 @@ module Parsect {
 
     /// seq function context object. See `seq` function.
     /// This is a distinctive object of Parsect.
-    export interface Context<S,U> {        
+    export interface Context<U> {        
         /// Apply a parser and return the semantic value.
         /// If `context.success` is true, apply `p` parser. If the parser succeeded, returns a semantic value. Otherwise, it returns undefined.
         /// If `context.success` is false, it ignores `p` and returns undefined 
@@ -278,7 +285,7 @@ module Parsect {
 
     /// Do-notation like parsing control flow.  
     /// @param f    callback function
-    export function seq<A,U>(f: (s: Context<A,U>)=>A): Parser<A>{
+    export function seq<A,U>(f: (s: Context<U>)=>A): Parser<A>{
         assert(f instanceof Function);
         function seqParser<U>(state: State<U>): Reply<A,U> {
             var st: Reply<any,U> = ok(state, undefined);
@@ -289,7 +296,7 @@ module Parsect {
                     return st.value; 
                 }                
             }
-            var context: Context<A,U> = <Context<A,U>> contextFunction;
+            var context: Context<U> = <Context<U>> contextFunction;
             context.success = true;
             context.userState = st.state._userState;
             var value: A = f(context);
@@ -860,7 +867,7 @@ module Parsect {
 
 
         var escapeEmpty = string('&');
-        var escapeGap   = seq((s: Context<string,void>)=>{
+        var escapeGap   = seq((s: Context<void>)=>{
             s(many1(space));
             return s(label("end of string gap", string('\\')));
         });
@@ -897,7 +904,7 @@ module Parsect {
         }
 
         var decimal         = number(10, digit);
-        var hexadecimal     = seq((s: Context<number,void>)=>{
+        var hexadecimal     = seq((s: Context<void>)=>{
             s(oneOf("xX"));
             return s(number(16, hexDigit));
         });
@@ -905,17 +912,17 @@ module Parsect {
             s(oneOf("oO"));
             return s(number(8,  octDigit));
         });
-        var zeroNumber: Parser<number>      = label("", seq((s: Context<number,void>)=>{
+        var zeroNumber: Parser<number>      = label("", seq((s: Context<void>)=>{
             s(string('0'));
             return s(or(hexadecimal, octal, decimal, pure(0)));
         }));
         var nat: Parser<number> = or(zeroNumber, decimal);
         var sign: Parser<(x: number)=>number> = or(
-            seq((s: Context<(x: number)=>number,void>)=>{
+            seq((s: Context<void>)=>{
                 s(string('-'));
                 return s(pure((x: number)=>-x));
             }),
-            seq((s: Context<(x: number)=>number,void>)=>{
+            seq((s: Context<void>)=>{
                 s(string('+'));
                 return s(pure((x: number)=> x));
             }),
@@ -929,7 +936,7 @@ module Parsect {
 
 
         //  -- floats
-        var exponent$ = label("exponent", seq((s: Context<number,void>)=>{
+        var exponent$ = label("exponent", seq((s: Context<void>)=>{
             function power(e: number): number {
                 return e < 0 ? 1.0 / power(-e) : (10^e);
             }
@@ -982,7 +989,7 @@ module Parsect {
             pure(0)
         );
         var natFloat = or(
-            seq((s: Context<number,void>)=>{
+            seq((s: Context<void>)=>{
                 s(string('0'));
                 return s(zeroNumFloat);
             }), 

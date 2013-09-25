@@ -54,7 +54,7 @@ module bancha {
             return expression;
         });
 
-        var term: p.Parser<string> = p.label("term", p.seq((s: p.Context<string,void>): string =>{
+        var term: p.Parser<string> = p.label("term", p.seq((s: p.Context<void>): string =>{
 
 
             var arrowFunctionArgs = p.or(
@@ -65,14 +65,14 @@ module bancha {
                 p.fmap((xs: string[]): string => "{" + xs.join('') + "}", lexer.braces(p.many(statement))),
                 expr
             );
-            var arrowFunction: p.Parser<string> = p.seq((s: p.Context<string,void>): string =>{
+            var arrowFunction: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
                 var args: string[] = s(arrowFunctionArgs);
                 s(lexer.symbol("=>"));
                 var e: string = s(arrowFunctionBody);
                 return s.success && "(function(" + args.join(',') + "){return " + e + "})";
             });
 
-            var nativeDirective: p.Parser<string> = p.seq((s: p.Context<string,void>): string =>{
+            var nativeDirective: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
                 s(lexer.reserved("native"));
                 return s(lexer.stringLiteral);
             });
@@ -123,7 +123,7 @@ module bancha {
         
         var exprStatement: p.Parser<string> = p.fmap((e: string): string => e + ";", p.head(expr, lexer.semi));
 
-        var varExpression: p.Parser<string> = p.seq((s: p.Context<string,void>): string => {
+        var varExpression: p.Parser<string> = p.seq((s: p.Context<void>): string => {
             s(lexer.reserved("var"));
             var name: string = s(lexer.identifier);
             s(lexer.symbol("="));
@@ -132,7 +132,7 @@ module bancha {
         });
 
 
-        var varStatement: p.Parser<string> = p.seq((s: p.Context<string,void>): string => {
+        var varStatement: p.Parser<string> = p.seq((s: p.Context<void>): string => {
             var e: string = s(varExpression);
             s(lexer.semi);
             return e + ";";
@@ -140,7 +140,7 @@ module bancha {
 
         var returnStatement: p.Parser<string> = p.fmap((e: string): string => "return "+e+";", p.between(lexer.reserved("return"), expr, lexer.semi));
 
-        var operatorStatement: p.Parser<string> = p.seq((s: p.Context<string,void>): string =>{
+        var operatorStatement: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
             function addOperator(unary: (x: string)=>string, binary: (x: string, y: string)=>string): void {
                 var newOperator = type === "prefix"  ? lexer.prefix (op, unary) :
                                   type === "postfix" ? lexer.postfix(op, unary) :
@@ -196,7 +196,7 @@ module bancha {
             return "for" + header + body;
         });
 
-        var funcStatement = p.seq((s: p.Context<string,void>)=>{
+        var funcStatement = p.seq((s: p.Context<void>)=>{
             s(lexer.reserved("function"));
             var name: string = s(lexer.identifier);
             var args: string[] = s(lexer.parens(p.sepBy(lexer.identifier, lexer.comma)));

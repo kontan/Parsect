@@ -1,201 +1,468 @@
 # Parsect : Parser Combinator for JavaScript/TypeScript
 
-** Sorry, this readme text is \*\*OLD\*\* and the API is mostly modified!  **
-
 ## Abstract
 
-**Parsect** is a parser combinator library for [TypeScript](http://www.typescriptlang.org/). It provides a easy way to write a readable parser in only TypeScript/JavaScript without any other domain-specific language like yacc/lex ANTLR or PEG.js. Naturally it can also be used from not only TypeScript and JavaScript.
+**Parsect** is a parser combinator library for [TypeScript](http://www.typescriptlang.org/) or JavaScript. It provides a easy way to write a readable parser in only TypeScript/JavaScript without any other domain-specific languages like yacc/lex, ANTLR or PEG.js. Parsect can be used from not only TypeScript and JavaScript but also other [AltJS](http://altjs.org/)s.
 
 I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Parsec) parser combinator library in Haskell, however this is not a porting of Parsec. Unfortunately, this library doesn't have underlying Monad or Fanctor and it doesn't deal a string as a list of charactor. However, you can combine parsers in the same manner as Parsec with Parsect. 
 
-Parsect characteristically has Haskell's do notation-like notation style. This notation makes a parser more readable. Additionally, a regular expression parser also is supported and you can combine RegExp parsers with other parsers. 
+* Parsec-like API
+* Statically typed: The API of Parsect is statically typed like Parsec with TypeScript. However, you can also use it from JavaScript as dynamically typed API.
+* *do-notation* like syntax: Parsect has Haskell's do-notation-like notation style. This notation makes a parser more readable. 
+* Functional Programming API: Most of functions are referential transparency. It means you don't need to consider states of your parsers. 
+* Easy debugging: You can set a breakpoint in the middle of your parser and watch that the parser consumes the input step-by-step.　 
+* Exitra parsers: Regular expression parser also is supported. You can combine RegExp parsers with other parsers. 
+* Token parser builder: `makeTokenParser` function is supported.
+* Expression parser builder: `buildExpressionParser` function is supported.
 
-Debugging parser is easy. You can set a breakpoint in the middle of your parser and watch that the parser consumes the input step-by-step.　 
+
 
 ## Getting Started
 
-In the following sample codes, most of identifiers are not prefixed with the module name. All functions or Classes are in *Parsect* module but Parsect's *globals.ts* binds those identifiers to global namespace (It's a bad practice but I'm so lazy!). If you would not use those global indentifiers, you need to add a prefix of module name "Parsect" to all identifiers or *import* the module. 
+### `string` Parser Constructor
 
-### *number* parser
+Parsect has some functions that creates a parser. `string` function is one of them. `string` take a string and return new parser. This parser parses the string and return it as a raw result value. For example, if you want to parse a string "apple", use *string* function as follows:
 
-Parsect provides some commonly-used parsers. **number** is a built-in parser that parse a numeral strings. **number** is a **Persect.Parser** object and a Parser object has **parse** function in it's property. *parse* takes a string parameter as input. So following code parses numeric riteral "−273.15" with *number* parser. 
+    var parser: Parsect.Parser<string> = Parsect.string("apple");
+    var state: Parsect.State<void> = Parsect.state("apple, grape, banana", 0);
+    var reply: Parsect.Reply<string,void> = Parsect.parse(parser, state);
+    console.log(reply.value);   // prints "apple".
 
-    var r:State = number.parse("−273.15");
+Note a difference from `string` in Parsec. If the parser recieve a unexpected input string like `"application"`, the parser would consume no charactors and fail. The both two words have first four letter `"appl"` but the parser don't throw a exception and parsing would continue to search other matchings. 
 
-*parse* function returns a **Parsect.State** object. It contains the parsed numeric string, either succeed or failed, and the position in input at the parsing finished.
-
-    var r:State = number.parse("−273.15");
-    
-    var success:bool  = r.success;	       // successed or failed? ... true
-    var value:any     = r.value;           // any parsing raw result value ... "-273.15"	
-    var source:string = r.source.input;    // whole of input string ... "-273.15"
-    var pos:number    = r.source.position; // position in input ... 7
-
-You can get the raw parsing result value from the *value* property of the *State* obbject. *number* parser returns string as a raw result but some parsers returns other type value. 
-You can consider all parsers a imutable objects. Any parsing would not modify the parser and you can reuse those parsers as many times you want. Additionally you should not change any parser's property.
-
-### *string* constructor
-
-Parsect has some functions that creates a parser. **string** function is one of them. *string* take a string and return new parser. This parser parses the string and return it as a raw result value. For example, if you want to parse a string "apple", use *string* function as follows:
-
-    var p:Parser = string("apple");
-    var r:State  = p.parse("apple, grape, banana");
-    console.log(r.value);   // prints "apple".
-
-If the parser recieve a unexpected input string like "application", the parser would consume no charactors and fail. The both two words have first four letter "appl" but the parser don't throw a exception and parsing would continue to search other matchings. 
-
-### *regexp* constructor
-
-**regexp** function creates a parser that parses a string represented by regular expressions. *regexp* function takes a RegExp object. For example, the folllowing parser accepts any numerical string:
-
-    var number = regexp(/^[-+]?\d+(\.\d+)?/);
-
-*regexp* parser consumes a charactors from first charactor of input to end charactor of the matched string.
-
-### *many* combinator
+### `many` Parser Combinator
 
 Combinator is a function takes parsers as a parameter and returns new parser. **many** combinator create a parser parses infinitely repeat of a string pattern. *many* function takes a parser and return new parser. For example, the following parser comsumes a string like "abcabcabcabc...":
 
-    many(string("abc"))
+    Parsect.many(Parsect.string("abc"))
 
-Of course, *many* combinator can take a *regexp* parser:
+### `seq` Parser Combinator
 
-    many(number)
+`seq` combinator provides **do notaion** like notaion for Parsect. `seq` function take a other function for parameter. The parameter function is called back when the *seq* parses a string. The parameter function recieves a other function as a parameter. Typically, *seq* function is used as: 
 
-It consumes iteration of number, like "-33+29+0.2+4.4". 
-
-### *seq* combinator
-
-**seq** combinator provides *do notaion* like notaion for Parsect. *seq* function take a other function for parameter. The parameter function is called back when the *seq* parses a string. The parameter function recieves a other function as a parameter. Typically, *seq* function is used as: 
-
-    var p:Parser = seq((s)=>{
-    	s(string("("));
-    	var v:number = s(number);
-    	s(string(")"));
-    	return v;
+    var parser: Parsect.Parser<number> = Parsect.seq((s: Parsect.Context<void>): number => {
+        s(string("("));
+        var v: number = s(number);
+        s(string(")"));
+        return v;
     });
 
-This parser parses a numeric string between parenses. The argument *s* is a function takes a parser and execute it. A return value of *s(number)* is not a *Parsect.State* object but a **raw value** of result of parsing. So, the variable *v* would be bounded a *string* object. When *p* parses a string "(100)", *v* is "100". 
+This parser parses a numeric string between parenses. The argument `s` is a function takes a parser and execute it. A return value of `s(number)` is not a `Parsect.State` object but a **raw value** of result of parsing. So, the variable `v` would be bounded a `string` object. When `p` parses a string `"(100)"`, `v` is `100`. 
 
-If a parser applied to *s* failed, all following parsers would be ignore. 
+If a parser applied to `s` failed, all following parsers would be ignore. 
 
-When the parsing succeeded, *seq* returns a State object contains the value returned from the parameter function. Otherwise, the *value* property of the state object is *undefined*, regardless of the parameter function returns any value.
-
-*s* object has other useful properties:
-
-* **success():bool** returns the status of successing or failed about the seqence of parsers. 
-* **source():string** returns the next input string. 
-* **result():any** returns current raw result value.
+When the parsing succeeded, `seq` returns a State object contains the value returned from the parameter function. Otherwise, the `value` property of the state object is `undefined`, regardless of the parameter function returns any value.
 
 If calculation for the result value is costly, you should call *success()* function and avoid the calculation as follows:
 
-    var p:Parser = seq((s)=>{
+    var parser: Parsect.Parser<number> = Parsect.seq((s: Parsect.Context<void>)=>{
         s(string("("));
-        var v:number = s(number);
+        var v: number = s(number);
         s(string(")"));
-        if(s.success()){
-            return very_very_large_operation(v);
-        }
+        return s.success && very_very_large_operation(v);
     });
 
-### *series* combinator
+### `or` combinator
 
-**series** combinator takes some parsers as parameters and creates series of parsers. This parser returns just the value of last parser of the parameters. Following parser *p* parses "abc" and return "c" as raw value.
+`or` combinator takes some parsers as parameter and try parsing in sequence. If one of them could parse the input, the State object would be returned. For example, the following parser will consume any combination of "a" or "b":
 
-    var p:Parser = series(string('a'), string('b'), string('c'));
-
-### *or* combinator
-
-**or** combinator takes some parsers as parameter and try parsing in sequence. If one of them could parse the input, the State object would be returned. For example, the following parser will consume any combination of "a" or "b":
-
-    many(or(string("a"), string("b")));
-
-### *trying* combinator
-
-Here are two parsers. *pa* parses "[a]" and *pb* parses "[b]". A parser *or(pa, pb)* fails to parse "[b]".
-
-    var pa = between(string('['), string('a'), string(']'));
-    var pb = between(string('['), string('b'), string(']'));
-    var r = or(pa, pb).parse(new Source("(b)"));
-    console.log(r.success);    // prints "false"
-
-It's because *pa* consumes "[" and *pb* receives remaining "b]". Generally, commonalizing "[" of both of parsers is the best way. 
-
-    var pa = series(string('a'), string(']'));
-    var pb = series(string('b'), string(']'));
-    var r = series(string('['), or(pa, pb)).parse(new Source("[b]"));
-    console.log(r.success);    // prints "true"
-
-However, if commonalizing is difficult, you can use *trying* combinator to solve it. *trying* parser can retrieve overconsumed strings.
-
-    var pa = between(string('['), string('a'), string(']'));
-    var pb = between(string('['), string('b'), string(']'));
-    var r = or(trying(pa), pb).parse(new Source("[b]"));
-    console.log(r.success);    // prints "true"
+    Parsect.many(Parsect.or(Parsect.string("a"), Parsect.string("b")));
 
 
-## Sample Code
 
-Here is a sample of four arithmetic operations calculator. (To keep it simple, all operators are right-associative.)
 
-    var tok_number = map(parseFloat, regexp(/^\s*[-+]?\d+(\.\d+)?\s*/));
-    var tok_plus  = regexp(/^\s*\+\s*/);
-    var tok_minus = regexp(/^\s*\-\s*/);
-    var tok_div   = regexp(/^\s*\/\s*/);
-    var tok_mul   = regexp(/^\s*\*\s*/);
-    var tok_left  = regexp(/^\s*\(\s*/);
-    var tok_right = regexp(/^\s*\)\s*/);
-    
-    // expr := term ("+" expr | "-" expr)?
-    var expr = seq((s)=>{
-        var v = s(term);
-        s(option(v, or(
-            seq((s)=>{  
-                s(tok_plus);
-                var e = s(expr);
-                return v + e;
-            }),
-            seq((s)=>{
-                s(tok_minus);
-                var e = s(expr);
-                return v - e;
-            })
-        )));
+
+
+
+
+
+
+
+
+## Common Pitfall
+
+
+### Left Recursion
+
+(TODO: Left Recursion)
+
+
+
+### Definition Ordering and lazy parser
+
+(TODO: Definition Ordering)
+
+
+
+
+### Predictive Parsers
+
+Here are two parsers. `*pa*` parses `"[a]"` and `*pb*` parses `"[b]"`. A parser `or(pa, pb)` fails to parse `"[b]"`.
+
+    var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
+    var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
+    var parser = Parsect.or(pa, pb);
+
+    var state = Parsect.state("(b)", 0);
+    var reply = Parsect.parse(parser, state);
+    console.log(reply.success);                 // prints "false"!
+
+It's because `pa` consumes `"["` even if whole of `pa` failed. Generally, commonalizing `"["` of both of parsers is the best way. 
+
+    var pa = Parsect.series(Parsect.string('a'), Parsect.string(']'));
+    var pb = Parsect.series(Parsect.string('b'), Parsect.string(']'));
+    var parser  = Parsect.seq(s=>{
+        s(string('['));
+        return s(Parsect.or(pa, pb));
     });
+
+    var state = Parsect.state("(b)", 0);
+    var reply = Parsect.parse(parser, state);
+    console.log(reply.success);                 // prints "true"!
+
+However, if commonalizing is difficult, you can use `triable` combinator to solve it. `triable` parser can retrieve overconsumed strings.
+
+    var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
+    var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
+    var parser = Parsect.or(Parsect.triable(pa), pb);
+
+    var state = Parsect.state("(b)", 0);
+    var reply = Parsect.parse(parser, state);
+    console.log(reply.success);                 // prints "true"!
+
+
+
+
+
+
+
+
+## APIs
+
+### Date Types
+
+----
+
+#### `class State` 
+
+##### Type Variables
+
+* `U` User state.
+
+##### Constructors
+
+* `state(source: string, position: number = 0, userState?: U): State<U>`
+
+##### Members
+
+* `source: string` Source string.
+* `position: number` Current position.
+* `getRowColumn(): { raw: number; column: number; }` Calculate raw number and column number from current position. Those values are ZERO-BASED.
+* `seek(delta: number): State<U>` Creates new State object that has new position.
+* `equals(src: State<U>): boolean` Compare two state objects.
+
+----
+
+#### `class Reply` 
+
+    class Reply<A,U>
+
+##### Type Variables
+
+* `A` Semantic value.
+* `U` User state.
+
+##### Constructors
+
+* `ok<A,U>(state: State<U>, value: A): Reply<A,U>`
+* `error<A,U>(state: State<U>, expected?: ()=> string): Reply<A,U>`
+
+##### Members
+
+* `state: State<U>` State after the parsing.
+* `success: boolean` Succeed or failed.
+* `value: A` The semantic value. 
+* `expected: ()=> string` 
+* `equals(st: Reply<A,U>): boolean`
+
+----
+
+#### `interface Context`
+
+##### Type Variables 
+
+* `U` User state.
+
+##### Members
+
+* `<T>(p: Parser<T>): T`
+* `userState: U` (read/write) Current user state.
+* `peek: string` (For debugging) Current input string.
+* `success: boolean` (For debugging) Success or fail.
+
+----
+
+#### `parse<A,U>(parser: Parser<A>, state: State<U>): Reply<A,U>`
+
+Invoke parser with the state.
+
+    // parser parses "abc" between "[" and "]".
+    var parser: Parsect.State<string> = Parsect.between(
+        Parsect.string("["),
+        Parsect.string("abc"),
+        Parsect.string("]")
+    );
+
+    var state: Parsect.State<void> = Parsect.state("[abc]", 0);
+    var reply: Reply<void> = Parsect.parse(parser, state);
+    console.log(reply.success);             // true
+    console.log(reply.value);               // "abc"
+    console.log(reply.state.source);        // "[abc]"
+    console.log(reply.state.position);      // 5
+
+    var state2: Parsect.State<void> = Parsect.state("[xyz]", 0);
+    var reply2: Reply<void> = Parsect.parse(parser, state);
+    console.log(reply2.success);             // false
+    console.log(reply2.expected);            // "abc"
+    console.log(reply2.state.source);        // "[abc]"
+    console.log(reply2.state.position);      // 1    (It's because the parser consume heading "[" then failed)
+
+----
+
+### Parser Constructors
     
-    // term := factor ("*" term | "/" term)?
-    var term = seq((s)=>{
-        var v = s(factor);
-        s(option(v, or(
-            seq((s)=>{
-                s(tok_mul);
-                var t = s(term);
-                return v * t;
-            }),
-            seq((s)=>{
-                s(tok_div);
-                var t = s(term);
-                return v / t;
-            })
-        )));
-    });
-    
-    // factor := "(" expr ")"  |  number
-    var factor = or(between(tok_left, expr, tok_right), tok_number);
-    
-    console.log(expr.parse(new Source("(4+1.5+-2.5)*2/0.5", 0)).value);    
+----
+
+#### `choice<T>(ps: Parser<T>[]): Parser<T>`
+
+#### `or<T>(...ps: Parser<T>[]): Parser<T>`
+
+#### `repeat<T>(min: number, max: number, p: Parser<T>): Parser<T[]>`
+
+#### `count<T>(n: number, p: Parser<T>): Parser<T[]>`
+
+#### `many<T>(p:Parser<T>): Parser<T[]>`
+
+#### `many1<T>(p: Parser<T>): Parser<T[]>`
+
+#### `array<T>(ps: Parser<T>[]): Parser<T[]>`
+
+#### `series<T>(...ps: Parser<T>[]): Parser<T[]>`
+
+#### `head<T>(p:Parser<T>, ...ps:Parser<any>[]): Parser<T>`
+
+#### `between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>): Parser<T>`
+
+#### `seq<A,U>(f: (s: Context<A,U>)=>A): Parser<A>`
+
+#### `sepByN<A>(min: number, max: number, p: Parser<A>, sep: Parser<any>): Parser<A[]>`
+
+#### `sepBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]>`
+
+#### `sepBy<T>(p:Parser<T>, sep:Parser<any>): Parser<T[]>`
+
+#### `endByN<T>(min: number, max: number, p: Parser<T>, sep: Parser<any>): Parser<T[]>`
+
+#### `endBy1<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]>`
+
+#### `endBy<T>(p: Parser<T>, sep: Parser<any>): Parser<T[]>`
+
+#### `option<T>(defaultValue: T, p: Parser<T>): Parser<T>`
+
+#### `optional<T>(p: Parser<T>): Parser<void>`
+
+#### `skipMany<A>(p: Parser<A>): Parser<void>`
+
+#### `skipMany1<A>(p: Parser<A>): Parser<void>`
+
+
+
+
+### Build-in Parsers
+
+#### `eof: Parser<void>`
+
+#### `empty: Parser<void>`
+
+#### `number: Parser<number>`
+
+
+
+### Error Handling Parser Constructors
+
+#### `fail(message: string): Parser<any>`
+
+#### `unexpected(message: string): Parser<any>`
+
+
+
+### Primitive Parsers
+
+#### `label<A>(message: string, p: Parser<A>): Parser<A>`
+
+#### `lookAhead<T>(p: Parser<T>): Parser<T>`
+
+#### `pure<T>(t: T): Parser<T>`
+
+#### `triable<T>(p: Parser<T>): Parser<T>`
+
+#### `notFollowedBy<T>(p: Parser<T>): Parser<void>`
+
+#### `fmap<T,S>(f: (v: T)=>S,   p: Parser<T>): Parser<S>`
+
+#### `lazy<T>(f: ()=>Parser<T>): Parser<T>`
+
+
+
+
+
+### Charactor Parsers
+
+#### `oneOf(chars: string): Parser<string>`
+
+#### `noneOf(chars: string): Parser<string>`
+
+#### `space: Parser<string>`
+
+#### `spaces: Parser<string>`
+
+#### `newline: Parser<string>`
+
+#### `tab: Parser<string>`
+
+#### `upper: Parser<string>`
+
+#### `lower: Parser<string>`
+
+#### `alphaNum: Parser<string>`
+
+#### `letter: Parser<string>`
+
+#### `digit: Parser<string>`
+
+#### `hexDigit: Parser<string>`
+
+#### `octDigit: Parser<string>`
+
+#### `char(c: string): Parser<string>`
+
+#### `anyChar:  Parser<string>`
+
+#### `satisfy(condition: (charactor: string, code: number)=>boolean): Parser<string>`
+
+#### `charCode(charCode: number): Parser<string>`
+
+----
+
+
+
+### String Parsers
+----
+
+#### `string(text: string, caseSensitive: boolean = true): Parser<string>`
+
+#### `regexp(pattern: RegExp): Parser<string>`
+
+----
+
+
+
+### Token Parser
+----
+
+### `interface LanguageDef`
+
+* `commentStart:       Parser<string>`
+* `commentEnd:         Parser<string>`
+* `commentLine:        Parser<string>`
+* `nestedComments:     boolean`
+* `identStart:         Parser<string>`
+* `identLetter:        Parser<string>`
+* `opStart:            Parser<string>`
+* `opLetter:           Parser<string>`
+* `reservedNames:      string[]`
+* `reservedOpNames:    string[]`
+* `caseSensitive:      boolean`
+
+### `interface GenTokenParser`
+
+* `identifier:     Parser<string>`
+* `reserved:       (s: string)=>Parser<string>`
+* `operator:       Parser<string>`
+* `reservedOp:     (s: string)=>Parser<string>`
+* `charLiteral:    Parser<string>`
+* `stringLiteral:  Parser<string>`
+* `natural:        Parser<number>`
+* `integer:        Parser<number>`
+* `float:          Parser<number>`
+* `naturalOrFloat: Parser<number>`
+* `decimal:        Parser<number>`
+* `hexadecimal:    Parser<number>`
+* `octal:          Parser<number>`
+* `symbol:         (s: String)=>Parser<string>`
+* `lexeme:         <A>(p: Parser<A>)=>Parser<A>`
+* `whiteSpace:     Parser<void>`
+* `parens:         <A>(p: Parser<A>)=>Parser<A>`
+* `braces:         <A>(p: Parser<A>)=>Parser<A>`
+* `angles:         <A>(p: Parser<A>)=>Parser<A>`
+* `brackets:       <A>(p: Parser<A>)=>Parser<A>`
+* `semi:           Parser<string>`
+* `comma:          Parser<string>`
+* `colon:          Parser<string>`
+* `dot:            Parser<string>`
+* `semiSep:        <A>(p: Parser<A>)=>Parser<A[]>`
+* `semiSep1:       <A>(p: Parser<A>)=>Parser<A[]>`
+* `commaSep:       <A>(p: Parser<A>)=>Parser<A[]>`
+* `commaSep1:      <A>(p: Parser<A>)=>Parser<A[]>`
+
+* `binary:  <A>(name: string, fun: (a: A, b: A)=>A, assoc: Assoc) => Operator<A>`
+* `prefix:  <A>(name: string, fun: (a: A)=>A) => Operator<A>`
+* `postfix: <A>(name: string, fun: (a: A)=>A) => Operator<A>`
+
+
+
+
+#### `makeTokenParser(def: LanguageDef): GenTokenParser`
+
+----
+
+
+
+### Expression Parser
+----
+
+#### `enum Assoc`
+
+* `None`
+* `Left`
+* `Right`
+
+#### `infix<A>(p: Parser<(l: A, r: A) => A>, assoc: Assoc): Operator<A>`
+
+#### `prefix<A>(p: Parser<(a: A) => A>): Operator<A>`
+
+#### `postfix<A>(p: Parser<(a: A) => A>): Operator<A>`
+
+#### `buildExpressionParser<A>(table: Operator<A>[][], term: Parser<A>): Parser<A>`
+
+
+
+
+
+
+
+
 
 ## Change log
 
-2013 01 01 **ver. 0.1**
-
-* First release
+* 2013/09/26 **ver. 0.2**. All APIs are cleaned up. `makeTokenParser` and `buildExpressionParser` supported.
+* 2013/01/01 **ver. 0.1**. Happy New Year! 
 
 ## TODO
 
-* Adding more useful functions like *sepBy*, *endBy*.
 * Adding more test cases or examples.
 * Performance tuning.
+* Cleaning up user state API.
 
 ## License
 
@@ -203,7 +470,7 @@ Parsect is licensed under the MIT License.
 
     The MIT License
     
-    Copyright 2013 Kon
+    Copyright 2013 Kon (http://phyzkit.net/)
     
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -225,7 +492,8 @@ Parsect is licensed under the MIT License.
 
 
 
-Some of the codes of Parsect were ported from Parsec3: 
+Some of the codes of Parsect were ported from [Parsec](http://hackage.haskell.org/package/parsec-3.1.3). 
+Parsec is provided under BSD-style license as below:
 
     Copyright 1999-2000, Daan Leijen; 2007, Paolo Martini. All rights reserved.
 
@@ -251,8 +519,8 @@ Some of the codes of Parsect were ported from Parsec3:
 
 ## Contact
 
-http://phyzkit.net/ 
 
-Kon[@KDKTN](http://twitter.com/KDKTN/) in twitter
+
+Author: Kon ( [@KDKTN](http://twitter.com/KDKTN/), http://phyzkit.net/ )
     
 日本語でもおｋ Japanese also available to contact me.

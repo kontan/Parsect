@@ -45,6 +45,7 @@ var Parsect;
     // Current parsing state.
     // <U> Type of user state.
     var State = (function () {
+        // You can use `state` function instead of `new State`.
         function State(source, position, _userState) {
             if (typeof position === "undefined") { position = 0; }
             this.source = source;
@@ -69,8 +70,8 @@ var Parsect;
             return { raw: raw, column: column };
         };
 
-        State.prototype.seek = function (count) {
-            return new State(this.source, this.position + count, this._userState);
+        State.prototype.seek = function (delta) {
+            return new State(this.source, this.position + delta, this._userState);
         };
 
         State.prototype.equals = function (src) {
@@ -79,6 +80,13 @@ var Parsect;
         return State;
     })();
     Parsect.State = State;
+
+    // Create new state object.
+    function state(source, position, userState) {
+        if (typeof position === "undefined") { position = 0; }
+        return new State(source, position, userState);
+    }
+    Parsect.state = state;
 
     /// Result of parsing.
     /// (equiv. Text.Parsec.Prim.Reply)

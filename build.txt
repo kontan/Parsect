@@ -1,4 +1,4 @@
---target ES5 --noImplicitAny
+--noImplicitAny
 src/parsect.ts
 test/test.ts
 example/bancha/bancha.ts
