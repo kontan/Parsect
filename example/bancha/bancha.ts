@@ -1,17 +1,28 @@
 /// <reference path="../../src/parsect.ts" />
+
+// Sample program: BanchaScript compiler
+//
+// BanchaScript is a AltJS, a programming language compiled into JavaScript source code.
+// See bancha.html for sample soruce codes.
+//
+
 module bancha {
     import p = Parsect;
 
-    // 字句解析器
+    // Lexer. 字句解析器
+    var identStart  = p.oneOf("_$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    var identLetter = p.oneOf("_$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+    var opStart     = p.oneOf("+-*/=!$%&^~@?_><:|\\.");
+    var opLetter    = p.oneOf("+-*/=!$%&^~@?_><:|\\.");
     var lexer: p.GenTokenParser = p.makeTokenParser({
-        commentStart:       '/*',
-        commentEnd:         '*/',
-        commentLine:        '//',
+        commentStart:       p.string('/*'),
+        commentEnd:         p.string('*/'),
+        commentLine:        p.string('//'),
         nestedComments:     true,
-        identStart:         p.regexp(/[_$a-zA-Z]/),
-        identLetter:        p.regexp(/[_$a-zA-Z0-9]/),
-        opStart:            p.regexp(/[+\-*\/=!$%&\^~@?_><:|\\.]/),
-        opLetter:           p.regexp(/[+\-*\/=!$%&\^~@?_><:|\\.]/),
+        identStart:         identStart,
+        identLetter:        identLetter,
+        opStart:            opStart,
+        opLetter:           opLetter,
         reservedNames:      ["function", "return", "operator", "infix", "infixl", "infixr", "prefix", "postfix", "var", "if", "else", "for", "native"],
         reservedOpNames:    [],
         caseSensitive:      true
@@ -19,7 +30,13 @@ module bancha {
 
     export class Scope {
 
-        opTable: p.Operator<string>[][] = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]];
+        opTable: p.Operator<string>[][] = [[p.infix(lexer.lexeme(p.seq(s=>{
+            s(p.string("`"));
+            var ops = s(identStart);
+            var opl = s(p.many(identLetter));
+            s(p.string("`"));
+            return (x: string, y: string)=> "(" + ops + opl + "(" + x + "," + y + "))";
+        })), p.Assoc.None)],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]];
         
         constructor(){
         }
@@ -39,16 +56,19 @@ module bancha {
 
         var term: p.Parser<string> = p.label("term", p.seq((s: p.Context<string,void>): string =>{
 
+
+            var arrowFunctionArgs = p.or(
+                p.fmap((x: string): string[] => [x], lexer.identifier),
+                lexer.parens(p.sepBy(lexer.identifier, lexer.comma))
+            );
+            var arrowFunctionBody = p.or(
+                p.fmap((xs: string[]): string => "{" + xs.join('') + "}", lexer.braces(p.many(statement))),
+                expr
+            );
             var arrowFunction: p.Parser<string> = p.seq((s: p.Context<string,void>): string =>{
-                var args: string[] = s(p.or(
-                    p.fmap((x: string): string[] => [x], lexer.identifier),
-                    lexer.parens(p.sepBy(lexer.identifier, lexer.comma))
-                ));
+                var args: string[] = s(arrowFunctionArgs);
                 s(lexer.symbol("=>"));
-                var e: string = s(p.or(
-                    p.fmap((xs: string[]): string => "{" + xs.join('') + "}", lexer.braces(p.many(statement))),
-                    expr
-                ));
+                var e: string = s(arrowFunctionBody);
                 return s.success && "(function(" + args.join(',') + "){return " + e + "})";
             });
 
@@ -59,17 +79,21 @@ module bancha {
 
             var functionalOperator: p.Parser<string> = p.fmap((op: string): string => '(function(x,y){return x' + op + 'y})', lexer.parens(lexer.operator));
 
+            var arrayLiteral: p.Parser<string> = p.fmap((xs: string[]): string => "[" + xs.join(',') + "]", lexer.brackets(p.sepBy(expr, lexer.comma)));
+
+
             var value: string = s(p.or(
                 p.triable(functionalOperator),
+                p.triable(arrowFunction),                                               // アロー関数式      
+                arrayLiteral,                                                           // 配列リテラル
                 p.fmap(x => '(' + x + ')', lexer.parens(expr)),                         // ( 式 )
                 p.fmap(x => '"' + x + '"', lexer.stringLiteral),                        // 文字列リテラル
                 p.fmap(x => x.toString(), lexer.naturalOrFloat),                        // 数値リテラル
                 nativeDirective,                                                        // native ディレクティブ
-                p.triable(arrowFunction),                                               // アロー関数式
                 lexer.identifier                                                        // 識別子
             ));
             
-            // 関数適用
+            // Function application syntax parser. 関数適用
             var app: p.Parser<string> = p.fmap(
                 (args: string[]): string　=>　{
                     if(args.every(x => !!x)){
@@ -106,6 +130,7 @@ module bancha {
             var e: string = s(expr);
             return "var " + name + "=" + e;
         });
+
 
         var varStatement: p.Parser<string> = p.seq((s: p.Context<string,void>): string => {
             var e: string = s(varExpression);

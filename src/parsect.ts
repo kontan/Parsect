@@ -1,7 +1,10 @@
 //
 //                            Parsect 
 //
-//              Parser Combinator for JavaScript/TypeScript  
+//          Parser Combinator Library for JavaScript/TypeScript  
+//
+//                           Revision 2
+//
 //
 //
 //             site: https://github.com/kontan/Parsect
@@ -32,6 +35,11 @@
 // THE SOFTWARE.
 //
 
+
+
+// Note: All properties of objects of Persect are readonly unless any indication is given.
+// All function don't accept `null` as a parameter. 
+
 'use strict';
 
 module Parsect {
@@ -40,45 +48,30 @@ module Parsect {
     // Data Type Definitions ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     
+    // Current parsing state.
+    // <U> Type of user state.
     export class State<U> {
-
-        rawColumn: { raw: number; column: number; };
-
-        path: string;
-    
-        constructor(public source: string, public position: number = 0, public _userState?: U, public _path: string[] = []){    
+        constructor(public source: string, public position: number = 0, public _userState?: U){    
             assert(typeof source !== "undefined");
             assert(source !== null);
             if(position < 0 || position > source.length + 1) throw "_position: out of range: " + position;
-            Object.defineProperty(this, "path", { get: ()=> this._path.join(' > ') });
-            Object.defineProperty(this, "rawColumn", { get: ()=>{
-                var lines = source.split("\n");
-                var position = 0;
-                var raw = 0;
-                while(position < this.position){
-                    if(this.position <= position + lines[raw].length) break;
-                    position += lines[raw].length + 1;
-                    raw++;
-                }
-                var column = this.position - position;
-                return { raw: raw, column: column };
-            }});
+        }
+
+        getRowColumn(): { raw: number; column: number; } {
+            var lines = this.source.split("\n");
+            var position = 0;
+            var raw = 0;
+            while(position < this.position){
+                if(this.position <= position + lines[raw].length) break;
+                position += lines[raw].length + 1;
+                raw++;
+            }
+            var column = this.position - position;
+            return { raw: raw, column: column };
         }
 
         seek(count: number): State {
-            return new State(this.source, this.position + count, this._userState, this._path);
-        }
-
-        pushTag(tag: string): State {
-            var _path_ = this._path.slice(0);
-            _path_.push(tag);
-            return new State(this.source, this.position, this._userState, _path_);
-        }
-
-        popTag(): State {
-            var _path_ = this._path.slice(0);
-            _path_.shift();
-            return new State(this.source, this.position, this._userState, _path_);
+            return new State(this.source, this.position + count, this._userState);
         }
 
         equals(src: State<U>): boolean {
@@ -86,39 +79,42 @@ module Parsect {
         }
     }
 
-    export function getState<U>(state: State<U>): U {
-        return state._userState;
-    }
-
-    export function setState<U>(state: State<U>, value: U): State<U> {
-        return new State<U>(state.source, state.position, value, state._path);
-    }
-
+    /// Result of parsing.
+    /// (equiv. Text.Parsec.Prim.Reply)
+    /// <A>　Type of semantic value.
+    /// <U> Type of User state.
     export class Reply<A,U> { 
-        /// private constructor
-        /// You should use success or fail functions instead of the constructor.
-        constructor(public state: State<U>, public success: boolean, public value?: A, public expected?: string, public failurePath?: string){
+        /// private constructor.
+        /// You should use success or fail functions instead of this constructor.
+        constructor(public state: State<U>, public success: boolean, public value: A, public expected: ()=> string){
         }
 
         equals(st: Reply<A,U>): boolean {
             return st &&
                    this.state.equals(st.state)     && 
                    this.success       === st.success &&
-                   (this.success ? jsonEq(this.value, st.value) : this.expected === st.expected);
+                   (this.success ? jsonEq(this.value, st.value) : ((this.expected === undefined && st.expected === undefined) || (this.expected() === st.expected())));
         }
     }
 
-    // create new successful state.
-    export function success<A,U>(state: State<U>, value: A): Reply<A,U> {
+    /// create new successful state.
+    /// (equiv. Text.Parsec.Prim.OK)
+    /// @param state    a state after parsing.
+    /// @param value    semantic value.
+    export function ok<A,U>(state: State<U>, value: A): Reply<A,U> {
         return new Reply(state, true, value, undefined);
     }
 
-    // create new failure state
-    export function failure<A,U>(state: State<U>, expected?: string): Reply<A,U> {
-        return new Reply<A>(state, false, undefined, expected, state.path);
+    /// create new failure state.
+    /// (equiv. Text.Parsec.Prim.Error)
+    /// @param state    a state after parsing.
+    /// @param expected 
+    export function error<A,U>(state: State<U>, expected?: ()=> string): Reply<A,U> {
+        return new Reply<A>(state, false, undefined, expected);
     }
 
-    /// parser object
+    /// parser object.
+    /// <A> Type of Semantic value.
     export class Parser<A> {
         /// create new parser.
         /// @param parse parsing function
@@ -133,38 +129,23 @@ module Parsect {
     /// @param state state.
     /// @return the result of parssing.
     export function parse<A,U>(parser: Parser<A>, state: State<U>): Reply<A,U> {
+        //assert( !! parser);
         return parser.runParser(state);
     }
-/*
-    // convert a argument into a string parser.
-    // *HACK* ... It returns Parser<T> or Function! 
-    export function asParser   (pattern: Parser<string>): Parser<string> ;
-    export function asParser   (pattern: string        ): Parser<string> ;
-    export function asParser   (pattern: RegExp        ): Parser<string> ;
-    export function asParser<A>(pattern: ()=>Parser<A> ): Parser<A     > ;
-    export function asParser<A>(pattern: Parser<A>[]   ): Parser<A[]   > ;
-    export function asParser   (pattern: any           ): Parser<any   > {
-             if(pattern instanceof Parser  ) return pattern;
-        else if(pattern instanceof String  ) return string(pattern);
-        else if(typeof pattern === "string") return string(pattern);        
-        else if(pattern instanceof RegExp  ) return regexp(pattern);
-        else if(pattern instanceof Array   ) return array (pattern);
-        else if(pattern instanceof Function) return lazy  (pattern); 
-        else throw new Error();
-    }
-*/
-    /// seq function context object.
-    export interface Context<S,U>{        
-        /// パーサをこのコンテキストで実行し、そのパーサの意味値を返します。
-        /// パースが失敗した場合は undefined を返します。
-        /// コンテキストが失敗している場合は、パースは実行されず undefined が返ります。
+
+    /// seq function context object. See `seq` function.
+    /// This is a distinctive object of Parsect.
+    export interface Context<S,U> {        
+        /// Apply a parser and return the semantic value.
+        /// If `context.success` is true, apply `p` parser. If the parser succeeded, returns a semantic value. Otherwise, it returns undefined.
+        /// If `context.success` is false, it ignores `p` and returns undefined 
         <T>(p: Parser<T>): T;
 
-        userState: U;        /// 現在のコンテキストのユーザ状態。自由に書き込み、読み込みが可能です。
-        peek: string;           // (readlony) Current input string
-        tags: string;
-        success: boolean;       // (readonly) 
-        value: any;             // (readonly)
+        userState: U;        /// (read/write) Current user state.
+        
+        // The following properties provided for debugging, you should not use to parsing.
+        peek: string;        /// Current input string.
+        success: boolean;    /// Success or fail.
     }
 
 
@@ -183,36 +164,36 @@ module Parsect {
 
     // Choice parser combinators //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    /// (equiv. Text.Parsec.Combinator.choice)
     export function choice<T>(ps: Parser<T>[]): Parser<T> {
-        //ps = ps.map(asParser);
         function choiceParser<U>(state: State<U>){
             // For debugging　and efficiency, expand list as loop intentionally.
-            var sts = [];
-            for(var i = 0; i < ps.length; i++){
-                var st = parse(ps[i], state);
+            var sts: Reply<T,U>[] = [];
+            for(var i: number = 0; i < ps.length; i++){
+                var st: Reply<T,U> = parse(ps[i], state);
                 if(st.success || st.state.position != state.position){
                     return st;
                 }
                 sts.push(st);
             }
-            return failure(state, "one of " + sts.map(st=>st.expected).join(','));
+            return error(state, ()=> "one of " + sts.map(st=>st.expected()).join(','));
         }
         return new Parser(choiceParser);
     }
 
+    /// Variable parameter version of `choice`.
     export function or<T>(...ps: Parser<T>[]): Parser<T> {
         return choice(ps);
     }
 
     // Repetitious parser constructors ////////////////////////////////////////////////////////////////////////////////////////
 
-    // repeat:(n:number, m: number, p:Parser<T>):Parser<T[]>
+    /// `repeat n m p` parses `n` occurrences of `p` at minimum, parses `m` occurrences of `p` at maximum.  
     export function repeat<T>(min: number, max: number, p: Parser<T>): Parser<T[]> {
-        //p = asParser(p);
         function repeatParser<U>(s: State<U>){
             // For debugging　and efficiency, expand list as loop intentionally.
             var xs:any[] = [];
-            var st = success(s, undefined);
+            var st = ok(s, undefined);
             for(var i = 0; i < max; i++){
                 var _st = parse(p, st.state);
                 if(_st.success){
@@ -230,90 +211,62 @@ module Parsect {
                     break;
                 }
             }
-            return success(st.state, xs);
+            return ok(st.state, xs);
         }
         return new Parser(repeatParser);
     }
 
-    // count:(n:number, p:Parser<T>):Parser<T[]>
+    /// (equiv. Text.Parsec.Combinator.count)
     export function count<T>(n: number, p: Parser<T>): Parser<T[]> {
         return repeat(n, n, p);
     }
 
+    /// (equiv. Text.Parsec.Combinator.many)
     export function many<T>(p:Parser<T>): Parser<T[]> {
         return repeat(0, Number.MAX_VALUE, p);
     }
 
-    // many1:(p:Parser<T>):Parser<T[]>
+    /// (equiv. Text.Parsec.Combinator.many1)
     export function many1<T>(p: Parser<T>): Parser<T[]> {
         return repeat(1, Number.MAX_VALUE, p);
     }
 
     // Sequential parser constructors ///////////////////////////////////////////////////////////////////////////////////////
 
-    /// array parser receives an array of Parser and consumes those parser input sequentially.
+    /// `array ps` parses the parser of `ps` sequentially and return the reply of those parsers.
     export function array<T>(ps: Parser<T>[]): Parser<T[]> {
-        //ps = ps.map(asParser);
         function arrayParser<U>(state: State<U>): Reply<T[],U> {
             var values: T[] = [];
-            var st:Reply<T,U> = success(state, undefined);
+            var st:Reply<T,U> = ok(state, undefined);
             for(var i = 0; i < ps.length; i++){
                 st = parse(ps[i], st.state);
-                if( ! st.success) return failure(st.state, st.expected);
+                if( ! st.success) return error(st.state, st.expected);
                 values.push(st.value);
             }
-            return success(st.state, values);
+            return ok(st.state, values);
         }
         return new Parser<T[]>(arrayParser);
     }
 
+    /// variable parameters version of `array`.
     export function series<T>(...ps: Parser<T>[]): Parser<T[]> {
         return array(ps);
     }
 
-    /// head(a, b, c, ...) parses a, b, c and etc, and returns value of a.
+    /// `head(a, b, c, ...)` parses `a`, `b`, `c` and etc, and returns reply of `a`.
     export function head<T>(p:Parser<T>, ...ps:Parser<any>[]): Parser<T> {
-        //p = asParser(p); ps = ps.map(asParser);
         function headParser<U>(state: State<U>): Reply<T,U>{
             var st:Reply<any,U> = parse(p, state);
             var value: T = st.value;
             for(var i = 0; i < ps.length && st.success; i++){
                 st = parse(ps[i], st.state);
             }
-            return st.success ? success(st.state, value) : st;
+            return st.success ? ok(st.state, value) : st;
         }
         return new Parser(headParser);
     }
 
-
-
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// tail combinator needs overloading but it make a compiler slow down seriously. 
-// Don't use tail parser, use seq combnator instead. 
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-/*
-    // tail function takes parsers and apply its sequentially.
-    // This function returns the Reply object that last parser returned.
-    export function tail<T>(                                                                                                         p:Parser<T>):Parser<T>;
-    export function tail<T>(a:Parser<any>,                                                                                           p:Parser<T>):Parser<T>;
-    export function tail<T>(a:Parser<any>, b:Parser<any>,                                                                            p:Parser<T>):Parser<T>;
-    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>,                                                             p:Parser<T>):Parser<T>;
-    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>,                                              p:Parser<T>):Parser<T>;    
-    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>,                               p:Parser<T>):Parser<T>;
-    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>, f:Parser<any>,                p:Parser<T>):Parser<T>;
-    export function tail<T>(a:Parser<any>, b:Parser<any>, c:Parser<any>, d:Parser<any>, e:Parser<any>, f:Parser<any>, g:Parser<any>, p:Parser<T>):Parser<T>;
-    export function tail(...ps:Parser<any>[]): any {
-        ps = ps.map(asParser);
-        function tailParser<U>(state:State<U>): Reply<any,U>{
-            var st:Reply<any,U> = success(state, undefined);
-            for(var i = 0; i < ps.length && st.success; i++){
-                st = parse(ps[i], st.state);
-            }
-            return st;
-        }
-        return new Parser(tailParser);
-    }
-*/
+    /// (equiv. Text.Parsec.Combinator.between)
     export function between<T>(open:Parser<any>, p:Parser<T>, close:Parser<any>): Parser<T> {
         return seq(s=>{
             s(open);
@@ -323,56 +276,41 @@ module Parsect {
         });
     }
 
-    ///
-    /// seq コンテキストオブジェクトを介して、パーサを順に適用します。
-    /// パラメータ f の引数 s は 
-    /// 
-    /// @param f コンテキストを実行するコールバック。
-    /// 
-    export function seq<T,U>(f: (s: Context<T,U>)=>T): Parser<T>{
+    /// Do-notation like parsing control flow.  
+    /// @param f    callback function
+    export function seq<A,U>(f: (s: Context<A,U>)=>A): Parser<A>{
         assert(f instanceof Function);
-        function seqParser<U>(state: State<U>): Reply<T,U> {
-            var st: Reply<T,U> = success(state, undefined);
-            var lastValue: T = undefined;
-            var context: Context<T,U> = <Context<T,U>> ((a: any)=>{
+        function seqParser<U>(state: State<U>): Reply<A,U> {
+            var st: Reply<any,U> = ok(state, undefined);
+            function contextFunction<T>(p: Parser<T>): T {
                 if(st.success){
-                    //var _a: Parser<T> = asParser(a);
-                    //st = parse(_a, st.state);
-                    st = parse(a, st.state);
-                    
-                    lastValue = st.value;
+                    st = parse(p, st.state);
+                    context.success = st.success;
                     return st.value; 
-                }
-            });
-            Object.defineProperty(context, "userState", { 
-                get: ()=> st.state._userState,
-                set: (u: U)=>{ st.state._userState = u; }
-            });
-            Object.defineProperty(context, "success",   { get: ()=> st.success });
-            Object.defineProperty(context, "peek",      { get: ()=> st.state.source.slice(st.state.position, st.state.position + 128) });
-            Object.defineProperty(context, "tags",      { get: ()=> st.state._path.join(' > ') });            
-            Object.defineProperty(context, "value",     { get: ()=> st.value });
-            var value: any = f(context);
-            return context.success ? success(st.state, value) : st;
+                }                
+            }
+            var context: Context<A,U> = <Context<A,U>> contextFunction;
+            context.success = true;
+            context.userState = st.state._userState;
+            var value: A = f(context);
+            st.state._userState = context.userState;
+            return context.success ? ok(st.state, value) : st;
         }
-        return new Parser<T>(seqParser);
+        return new Parser<A>(seqParser);
     }
 
     // Alternative parser constructors /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    export function sepByN<T>(min: number, max: number, p: Parser<T>, sep: Parser<any>): Parser<T[]> {
-        //p = asParser(p); sep = asParser(sep);
-        assert(min <= max);
-        function sepByNParser<U>(source: State<U>): Reply<T[],U>{
-            // For debugging　and efficiency, expand list as loop intentionally.
-            var xs: T[] = [];
-            var st = success(source, undefined);
-
+    /// 
+    export function sepByN<A>(min: number, max: number, p: Parser<A>, sep: Parser<any>): Parser<A[]> {
+        assert(p instanceof Parser); assert(sep instanceof Parser); assert(min <= max);
+        function sepByNParser<U>(source: State<U>): Reply<A[],U>{
+            var xs: A[] = [];
+            var st = ok(source, undefined);
             var _st = parse(p, st.state);
             if(_st.success){
                 st = _st;
                 xs.push(_st.value);
-
                 for(var i = 1; i < max; i++){
                     var _st = parse(sep, st.state);
                     if(_st.success){
@@ -389,13 +327,7 @@ module Parsect {
             }else if(xs.length < min){
                 return _st;
             }
-
-            if(st.success){
-                return success(st.state, xs);
-            }else{
-                return st;
-            }
-                
+            return st.success ? ok(st.state, xs) : st;
         }
         return new Parser(sepByNParser);
     }
@@ -426,24 +358,23 @@ module Parsect {
         return or(p, pure(defaultValue));
     }
 
-    // optional:(p:Parser<T>):Parser<T>
-    export function optional<T>(p: Parser<T>): Parser<T> {
+    export function optional<T>(p: Parser<T>): Parser<void> {
         return option(undefined, p);
     }
 
     // Build-in Parsees /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    export var eof:      Parser<void> = new Parser((state:State<any>)=>state.position === state.source.length ? success(state.seek(1), undefined) : failure(state, "end of file"));
-    export var empty:    Parser<void> = new Parser((state:State<any>)=>success(state, undefined));
+    export var eof:      Parser<void> = new Parser((state:State<any>)=>state.position === state.source.length ? ok(state.seek(1), undefined) : error(state, ()=> "end of file"));
+    export var empty:    Parser<void> = new Parser((state:State<any>)=>ok(state, undefined));
     export var number:   Parser<number> = fmap(parseFloat, regexp(/^[-+]?\d+(\.\d+)?/));
     
     export function fail(message: string): Parser<any> {
-        return new Parser<any>((state: State<any>)=>failure(state, message));
+        return new Parser<any>((state: State<any>)=>error(state, ()=> message));
     }
 
     export function unexpected(message: string): Parser<any> {
         function unexpectedParser<U>(state: State<U>): Reply<U,any> {
-            return failure(state, message);
+            return error(state, ()=> message);
         }
         return new Parser(unexpectedParser);
     }
@@ -473,13 +404,7 @@ module Parsect {
         return fmap((xs: any[])=>func.apply(undefined, xs), array(ps))
     }
 */
-    export function tag<T>(name: string, parser: Parser<T>): Parser<T> {
-        //parser = asParser(parser);
-        return new Parser((state: State)=>{
-            var result = parse(parser, state.pushTag(name));
-            return result.success ? success(result.state.popTag(), result.value) : result;
-        });
-    }
+
 
 
   
@@ -497,19 +422,17 @@ module Parsect {
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     export function label<A>(message: string, p: Parser<A>): Parser<A> {
-        //p = asParser(p);
         function labelParser<U>(state: State<U>): Reply<U,any> {
             var reply = parse(p, state);
-            return (( ! reply.success) && reply.state.position === state.position) ? failure(state, message) : reply;
+            return (( ! reply.success) && reply.state.position === state.position) ? error(state, ()=> message) : reply;
         }
         return new Parser(labelParser);
     }  
 
     export function lookAhead<T>(p: Parser<T>): Parser<T> {
-        //p = asParser(p);
         function lookAheadParser<U>(state: State<U>): Reply<T,U>{
             var st = parse(p, state);
-            return st.success ? success(state, st.value) : st;            
+            return st.success ? ok(state, st.value) : st;            
         }
         return new Parser(lookAheadParser);
     }    
@@ -519,28 +442,25 @@ module Parsect {
     }
 
     export function triable<T>(p: Parser<T>): Parser<T> {
-        //p = asParser(p);
         function triableParser<U>(state: State<U>): Reply<T,U> {
             var st = parse(p, state);
-            return st.success ? st : failure(state, st.expected);
+            return st.success ? st : error(state, st.expected);
         }
         return new Parser<T>(triableParser);
     }
 
     export function notFollowedBy<T>(p: Parser<T>): Parser<void> {
-        //p = asParser(p);
         function notFollowedByParser<U>(state: State<U>): Reply<T,U> {
             var rep = parse(p, state);
-            return rep.success ? failure(state, 'not ' + rep.value) : success(state, undefined);
+            return rep.success ? error(state, ()=> 'not ' + rep.value) : ok(state, undefined);
         }
         return new Parser(notFollowedByParser);
     }
 
     export function fmap<T, S>(f: (v: T     )=>S,   p: Parser<T>): Parser<S> {
-        //p = asParser(p);
         function mapParser<U>(state: State<U>): Reply<T,U> {
             var st = parse(p, state);
-            return st.success ? success(st.state, f(st.value)) : st;
+            return st.success ? ok(st.state, f(st.value)) : st;
         }
         return new Parser(mapParser);
     }
@@ -574,17 +494,17 @@ module Parsect {
         return satisfy(c=>chars.indexOf(c) == -1);
     }
 
-    export var spaces:   Parser<string> = regexp(/^\s*/);
-    export var space:    Parser<string> = regexp(/^\s/);
-    export var newline:  Parser<string> = string("\n");
-    export var tab:      Parser<string> = string("\t");
-    export var upper:    Parser<string> = regexp(/^[A-Z]/);
-    export var lower:    Parser<string> = regexp(/^[a-z]/);
-    export var alphaNum: Parser<string> = regexp(/^[0-9a-zA-Z]/);
-    export var letter:   Parser<string> = regexp(/^[a-zA-Z]/);
-    export var digit:    Parser<string> = regexp(/^[0-9]/);
-    export var hexDigit: Parser<string> = regexp(/^[0-9a-fA-F]/);
-    export var octDigit: Parser<string> = regexp(/^[0-7]/);
+    export var space:    Parser<string> = oneOf(" \t\r\n");
+    export var spaces:   Parser<string> = fmap(xs=>xs.join(), many(space));
+    export var newline:  Parser<string> = oneOf("\r\n");
+    export var tab:      Parser<string> = char("\t");
+    export var upper:    Parser<string> = oneOf("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    export var lower:    Parser<string> = oneOf("abcdefghijklmnopqrstuvwxyz");
+    export var alphaNum: Parser<string> = oneOf("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
+    export var letter:   Parser<string> = oneOf("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    export var digit:    Parser<string> = oneOf("0123456789");
+    export var hexDigit: Parser<string> = oneOf("0123456789abcdefghABCDEFGH");
+    export var octDigit: Parser<string> = oneOf("01234567");
     
     export function char(c: string): Parser<string> {
         assert(c && c.length === 1);
@@ -593,7 +513,6 @@ module Parsect {
     
     export var anyChar:  Parser<string> = satisfy(_=>true);
 
-    
     /// `satisfy cond` returns a parser consume a charactor that satisfy the condition `cond` 
     export function satisfy(condition: (charactor: string, code: number)=>boolean): Parser<string> {
         assert(condition instanceof Function);
@@ -612,11 +531,13 @@ module Parsect {
                 var c = s.source[s.position];
                 var i = s.source.charCodeAt(s.position);
                 if(condition(c, i)){
-                    return success(s.seek(1), c);
+                    return ok(s.seek(1), c);
                 }
             }
-            var cs = expectedChars();
-            return failure(s, (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"");
+            return error(s, ()=>{ 
+                var cs = expectedChars();
+                return (cs.length === 1 ? "" : "one of ") + "\"" + cs.join('') + "\"";
+            });
         }
         return new Parser<string>(satisfyParser);
     }
@@ -627,7 +548,7 @@ module Parsect {
         text = caseSensitive ? text : text.toLowerCase(); 
         function stringParser<U>(s: State<U>): Reply<string,U> {
             var slice = s.source.slice(s.position, s.position + text.length);
-            return text === (caseSensitive ? slice : slice.toLowerCase()) ? success(s.seek(text.length), text) : failure(s, "\"" + text + "\"");
+            return text === (caseSensitive ? slice : slice.toLowerCase()) ? ok(s.seek(text.length), text) : error(s, ()=> "\"" + text + "\"");
         }
         return new Parser<string>(stringParser);
     }
@@ -643,9 +564,9 @@ module Parsect {
             //  "input.indexOf(matches[0]) == 0" is needed.
             if(ms && ms.index == 0 && ms.length > 0){
                 var m = ms[0];
-                return input.indexOf(ms[0]) == 0 ? success(s.seek(m.length), m) : failure(s, "/" + pattern + "/");
+                return input.indexOf(ms[0]) == 0 ? ok(s.seek(m.length), m) : error(s, ()=> "/" + pattern + "/");
             }else{
-                return failure(s, "" + pattern);
+                return error(s, ()=> "" + pattern);
             }
         }
         return new Parser<string>(regexpParser);
@@ -653,8 +574,7 @@ module Parsect {
 
     export function range(min: string, max: string): Parser<string> ;
     export function range(min: number, max: number): Parser<string> ;
-    export function range(min: any,    max: any): Parser<string> {
-
+    export function range(min: any,    max: any   ): Parser<string> {
         assert(
             (
                 (typeof min === "number" || <Number>min instanceof Number) && 
@@ -689,9 +609,9 @@ module Parsect {
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     export interface LanguageDef {
-        commentStart:       string;
-        commentEnd:         string;
-        commentLine:        string;
+        commentStart:       Parser<string>;
+        commentEnd:         Parser<string>;
+        commentLine:        Parser<string>;
         nestedComments:     boolean;
         identStart:         Parser<string>;
         identLetter:        Parser<string>;
@@ -700,6 +620,9 @@ module Parsect {
         reservedNames:      string[];
         reservedOpNames:    string[];
         caseSensitive:      boolean;
+
+        // extension
+        operator?:           Parser<string>;
     }           
 
     export interface GenTokenParser {
@@ -733,7 +656,6 @@ module Parsect {
         commaSep1:      <A>(p: Parser<A>)=>Parser<A[]>;
 
 
-
         // misc 
         binary:  <A>(name: string, fun: (a: A, b: A)=>A, assoc: Assoc) => Operator<A>;
         prefix:  <A>(name: string, fun: (a: A)=>A) => Operator<A>;
@@ -756,29 +678,45 @@ module Parsect {
         }
 
         // whiteSpace
-        var noLine  = def.commentLine.length == 0;
-        var noMulti = def.commentStart.length == 0;
+        //var noLine  = def.commentLine.length == 0;
+        //var noMulti = def.commentStart.length == 0;
+        var noLine  = def.commentLine === null;
+        var noMulti = def.commentStart === null;
+
+
+        //var commentStart = triable(string(def.commentStart));
+        //var commentEnd = triable(string(def.commentEnd));
+        //var startEnd = (def.commentEnd + def.commentStart).split('').filter((x, i, xs)=>xs.indexOf(x) === i).join("");
+        var commentStart = triable(def.commentStart);
+        var commentEnd = triable(def.commentEnd);
 
         var oneLineComment = seq(s=>{
-            s(triable(string(def.commentLine)));
+            //s(triable(string(def.commentLine)));
+            s(triable(def.commentLine));
+
             s(skipMany(satisfy(x=>x!='\n')));
             return <void> undefined;
         });
         var multiLineComment = seq(s=>{
-            s(triable(string(def.commentStart)));
+            s(commentStart);
             return s(inComment);
         });
-        var startEnd = (def.commentEnd + def.commentStart).split('').filter((x, i, xs)=>xs.indexOf(x) === i).join("");
+
         var inCommentMulti =  label("end of comment", or(
-            seq(s=>{ s(triable(string(def.commentEnd))); }),
+            seq(s=>{ s(commentEnd); }),
             seq(s=>{ s(multiLineComment);               s(inCommentMulti) }),
-            seq(s=>{ s(skipMany1(noneOf(startEnd)));    s(inCommentMulti) }),
-            seq(s=>{ s(oneOf(startEnd));                s(inCommentMulti); })
+
+            //seq(s=>{ s(skipMany1(noneOf(startEnd)));    s(inCommentMulti) }),
+            //seq(s=>{ s(oneOf(startEnd));                s(inCommentMulti); })
+            seq(s=>{ s(notFollowedBy(commentEnd)); s(anyChar);    s(inCommentMulti) })
         ));
         var inCommentSingle = label("end of comment", or(
-            seq(s=>{ s(triable(string(def.commentEnd))); }),
-            seq(s=>{ s(skipMany1(noneOf(startEnd))); s(inCommentSingle); }),
-            seq(s=>{ s(oneOf(startEnd)); s(inCommentSingle); })
+            seq(s=>{ s(commentEnd); }),
+
+            //seq(s=>{ s(skipMany1(noneOf(startEnd))); s(inCommentSingle); }),
+            //seq(s=>{ s(oneOf(startEnd)); s(inCommentSingle); })
+            seq(s=>{ s(notFollowedBy(commentEnd)); s(anyChar);    s(inCommentSingle) })
+
         ));
         var inComment = def.nestedComments ? inCommentMulti : inCommentSingle;          
         var simpleSpace = skipMany1(oneOf(" \t\r\n"));
@@ -805,7 +743,13 @@ module Parsect {
             return isReservedOp(name) ? s(unexpected("reserved operator " + name)) : name;
         })));
 
-        var oper = seq(s=>{
+
+        if(
+            (def.operator && (def.opStart || def.opLetter)) || 
+            ( ! def.operator && ! def.opStart && ! def.opLetter)
+        ){ throw new Error(); }
+
+        var oper = def.operator || seq(s=>{
             var c = s(def.opStart);
             var cs = s(Join.many(def.opLetter));
             return c + cs;
@@ -1193,7 +1137,7 @@ module Parsect {
                 var pre  = s(prefixP);
                 var x    = s(term);
                 var post = s(postfixP);
-                return s.success ? post(pre(x)) : undefined;
+                return s.success && post(pre(x));
             });
 
             var postfixP = or(postfixOp, pure((x: A)=>x));
@@ -1203,7 +1147,7 @@ module Parsect {
                     seq(s=>{
                         var f: (a: A, b: A)=>A = s(rassocOp);
                         var y: A = s(seq(s=>{ var z = s(termP); return s(rassocP1(z)); }));
-                        return s.success ? f(x, y) : undefined;
+                        return s.success && f(x, y);
                     }),
                     ambigiousLeft,
                     ambigiousNon
@@ -1218,8 +1162,8 @@ module Parsect {
                 return or(
                     seq(s=>{
                         var f = s(lassocOp);
-                        var  y = s(termP);
-                        return s.success ? s(lassocP1(f(x, y))) : undefined;
+                        var y = s(termP);
+                        return s.success && s(lassocP1(f(x, y)));
                     }),
                     ambigiousRight,
                     ambigiousNon
@@ -1234,18 +1178,18 @@ module Parsect {
                 return seq(s=>{
                     var f = s(nassocOp);
                     var y = s(termP);
-                    return s.success ? s(or(
+                    return s.success && s(or(
                         ambigiousRight,
                         ambigiousLeft,
                         ambigiousNon,
                         pure(f(x, y))
-                    )) : undefined;
+                    ));
                 });
             }
 
             return seq(s=>{
                 var x = s(termP);
-                return s.success ? s(label("operator", or(rassocP(x), lassocP(x), nassocP(x), pure(x)))) : undefined;
+                return s.success && s(label("operator", or(rassocP(x), lassocP(x), nassocP(x), pure(x))));
             });
         }, simpleExpr);
     }
@@ -1262,7 +1206,6 @@ module Parsect {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     export function breakPoint<T>(parser: Parser<T>): Parser<T> {
-        //parser = asParser(parser);
         function breakPointParser<U>(state: State<U>): Reply<T,U> {
             debugger;
             return parse(parser, state);
@@ -1270,7 +1213,7 @@ module Parsect {
         return new Parser(breakPointParser);
     }
 
-    export function log(f: (state: number)=>void): Parser<void>{
+    export function progress(f: (state: number)=>void): Parser<void>{
         assert(f instanceof Function);
         var count = 0;
         function logParser<U>(state: State<U>): Reply<void,U> {
@@ -1279,7 +1222,7 @@ module Parsect {
                 count = pos;
                 f(count);
             }
-            return success(state, undefined);
+            return ok(state, undefined);
         };
         return new Parser(logParser);
     }
@@ -1328,21 +1271,3 @@ module Parsect {
         export function series(...ps: Parser<string>[]                                   ): Parser<string> { return fmap(x=>x.join(''), Parsect.array(ps)); }
     }
 }
-
-// *HACK* ... function overload combination hack
-//interface String {
-//    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<string,U>;
-//}
-
-//interface RegExp {
-//    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<string,U>;
-//}
-
-//interface Function {
-//    runParser: <U>(state: Parsect.State<U>)=>Parsect.Reply<any,U>;
-//}
-
-// Bug?
-//interface Array {
-//    parse: (state: Parsect.State)=>Parsect.Reply<any>;
-//}

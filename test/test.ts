@@ -10,9 +10,12 @@ module Tests {
     }
 
     function parse<A,U>(parser: p.Parser<A>, state: p.State<U>): p.Reply<A,U> {
-        //var parser = <any>p.asParser(parser);
         return p.parse(parser, state);
     }    
+
+    function error<A,U>(state: p.State<U>, expected: string): p.Reply<A,U> {
+        return p.error(state, ()=> expected);
+    }
 
     test("State object instantiation and equation", function() {
         var src:p.State<void> = new p.State<void>("hoge");
@@ -26,9 +29,9 @@ module Tests {
     test("State object invariance test", function() {
         var src:p.State<void> = new p.State("hoge");
         ok(src.equals(new p.State("hoge", 0)));
-        p.success(src.seek(2), "2");
+        p.ok(src.seek(2), "2");
         ok(src.equals(new p.State("hoge", 0)));
-        p.failure(src, "fail");
+        error(src, "fail");
         ok(src.equals(new p.State("hoge", 0)));
     });
 
@@ -53,7 +56,7 @@ module Tests {
     test("string parser test1", function() {
         var parser = p.string("hoge");
         var source = "hoge";
-        var expected = p.success(new p.State(source, 4), "hoge");
+        var expected = p.ok(new p.State(source, 4), "hoge");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -61,7 +64,7 @@ module Tests {
     test("string parser test2", function() {
         var parser = p.string("hoge");
         var source = "piyo";
-        var expected = p.failure(new p.State(source), "\"hoge\"");
+        var expected = error(new p.State(source), "\"hoge\"");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -69,7 +72,7 @@ module Tests {
     test("string parser test3", function() {
         var parser = p.string("hoge");
         var source = "hopo";
-        var expected = p.failure(new p.State(source), "\"hoge\"");
+        var expected = error(new p.State(source), "\"hoge\"");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -77,7 +80,7 @@ module Tests {
     test("string parser test4", function() {
         var parser = p.string("hoge");
         var source = "";
-        var expected = p.failure(new p.State(source), "\"hoge\"");
+        var expected = error(new p.State(source), "\"hoge\"");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -85,7 +88,7 @@ module Tests {
     test("string parser 5 case sensitive 1", function() {
         var parser = p.string("HOGE", false);
         var source = "hoge";
-        var expected = p.success(new p.State(source, 4), "hoge");
+        var expected = p.ok(new p.State(source, 4), "hoge");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -104,12 +107,12 @@ module Tests {
 
         // Success
         var source = "(hoge)";
-        var expected: p.Reply<SeqTestData,void> = p.success<SeqTestData,void>(new p.State(source, 6), { 'e': 'hoge' });
+        var expected: p.Reply<SeqTestData,void> = p.ok<SeqTestData,void>(new p.State(source, 6), { 'e': 'hoge' });
         ok(parse(parser, new p.State(source, 0)).equals(expected));
 
           // Fail
         var source = "(piyo)";
-        var expected2: p.Reply<any,void> = p.failure(new p.State<void>(source, 1), "\"hoge\"");
+        var expected2: p.Reply<any,void> = error(new p.State<void>(source, 1), "\"hoge\"");
         ok(parse(parser, new p.State(source, 0)).equals(expected2));
     });
 
@@ -132,7 +135,7 @@ module Tests {
             return s.success && a + b;
         });
         var source = "ab";
-        var expected = p.success(new p.State(source, 2), "ab");
+        var expected = p.ok(new p.State(source, 2), "ab");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -143,7 +146,7 @@ module Tests {
         var parser: p.Parser<string> = p.or(parens_a, parens_b);
 
         var source = "(b)";
-        var expected = p.failure(new p.State("(b)", 1), "\"a\"");
+        var expected = error(new p.State("(b)", 1), "\"a\"");
         var result = parse(parser, new p.State(source, 0));
         ok(result.equals(expected));
     });
@@ -151,7 +154,7 @@ module Tests {
     test("count 1", ()=>{
         var parser = p.fmap(join,  p.count(3, p.string("a")));
         var source = "aaa";
-        var expected = p.success(new p.State("aaa", 3), "a,a,a");
+        var expected = p.ok(new p.State("aaa", 3), "a,a,a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -159,7 +162,7 @@ module Tests {
     test("many 1", ()=>{
         var parser = p.fmap(join, p.many(p.string("a")));
         var source = "aa";
-        var expected = p.success(new p.State("aa", 2), "a,a");
+        var expected = p.ok(new p.State("aa", 2), "a,a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -167,7 +170,7 @@ module Tests {
     test("many1 1", ()=>{
         var parser = p.fmap( join, p.many1(p.string("a")));
         var source = "aaaaaaa";
-        var expected = p.success(new p.State("aaaaaaa", 7), "a,a,a,a,a,a,a");
+        var expected = p.ok(new p.State("aaaaaaa", 7), "a,a,a,a,a,a,a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -175,7 +178,7 @@ module Tests {
     test("many1 2", ()=>{
         var parser = p.fmap(join, p.many1(p.string("a")));
         var source = "aaaaaaa";
-        var expected = p.success(new p.State("aaaaaaa", 7), "a,a,a,a,a,a,a");
+        var expected = p.ok(new p.State("aaaaaaa", 7), "a,a,a,a,a,a,a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -183,7 +186,7 @@ module Tests {
     test("number 1", ()=>{
         var parser = p.number;
         var source = "-123.567";
-        var expected = p.success(new p.State("-123.567", 8), -123.567);
+        var expected = p.ok(new p.State("-123.567", 8), -123.567);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -191,7 +194,7 @@ module Tests {
     test("or 1", ()=>{
         var source = "baabbabaabbbazaabb";
         var parser = p.many(p.or(p.string("a"), p.string("b")));
-        var expected = new p.Reply(new p.State(source, 13), true, ["b","a","a","b","b","a","b","a","a","b","b","b","a"]);
+        var expected = p.ok(new p.State(source, 13), ["b","a","a","b","b","a","b","a","a","b","b","b","a"]);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -199,7 +202,7 @@ module Tests {
     test("or 2", ()=>{
         var source = "x";
         var parser = p.or(p.string("a"), p.string("b"), p.regexp(/c/));
-        var expected = p.failure(new p.State(source, 0), "one of \"a\",\"b\",/c/");
+        var expected = error(new p.State(source, 0), "one of \"a\",\"b\",/c/");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -207,7 +210,7 @@ module Tests {
     test("head 1", ()=>{
         var parser = p.head(p.string("a"), p.string("b"));
         var source = "ab";
-        var expected = p.success(new p.State(source, 2), "a");
+        var expected = p.ok(new p.State(source, 2), "a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -215,7 +218,7 @@ module Tests {
     test("tail 1", ()=>{
         var parser = p.tail(p.string("a"), p.string("b"));
         var source = "ab";
-        var expected = p.success(new p.State(source, 2), "b");
+        var expected = p.ok(new p.State(source, 2), "b");
         var result = parse(parser, source);
         ok(result.equals(expected));
     });
@@ -223,7 +226,7 @@ module Tests {
     test("tail 2", ()=>{
         var parser = p.tail(p.string("a"), p.head(p.string("b"), p.string("c")));
         var source = "abc";
-        var expected = p.success(new p.State(source, 3), "b");
+        var expected = p.ok(new p.State(source, 3), "b");
         var result = parse(parser, source);
         ok(result.equals(expected));
     });
@@ -231,7 +234,7 @@ module Tests {
     test("sepBy1 1", ()=>{
         var source = "a_a_a";
         var parser = p.sepBy1(p.string("a"), p.string("_"));
-        var expected = p.success(new p.State(source, 5), ["a", "a", "a"]);
+        var expected = p.ok(new p.State(source, 5), ["a", "a", "a"]);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -239,7 +242,7 @@ module Tests {
     test("sepBy1 2", ()=>{
         var parser = p.fmap(join, p.sepBy1(p.string("a"), p.string("_")));
         var source = "";
-        var expected = p.failure(new p.State(source), "\"a\"");
+        var expected = error(new p.State(source), "\"a\"");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -247,7 +250,7 @@ module Tests {
     test("sepBy1 3", ()=>{
         var parser = p.fmap(join, p.sepBy1(p.string("a"), p.string("_")));
         var source = "a";
-        var expected = p.success(new p.State(source, 1), "a");
+        var expected = p.ok(new p.State(source, 1), "a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -255,7 +258,7 @@ module Tests {
     test("sepBy1 4", ()=>{
         var parser = p.fmap(join, p.sepBy1(p.string("a"), p.string("_")));
         var source = "a_b";
-        var expected = p.failure(new p.State(source, 2), "\"a\"");
+        var expected = error(new p.State(source, 2), "\"a\"");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -263,7 +266,7 @@ module Tests {
     test("endByN 1", ()=>{
         var source = "a;a;a;";
         var parser = p.endBy(p.string("a"), p.string(";"));
-        var expected = p.success(new p.State(source, 6), ["a", "a", "a"]);
+        var expected = p.ok(new p.State(source, 6), ["a", "a", "a"]);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -272,7 +275,7 @@ module Tests {
     test("between 1", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']'));
         var source = "[a]";
-        var expected = p.success(new p.State(source, 3), "a");
+        var expected = p.ok(new p.State(source, 3), "a");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -280,21 +283,21 @@ module Tests {
     test("between 2", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']'));
         var source = "[b]";
-        var expected = p.failure(new p.State(source, 1), "\"a\"");
+        var expected = error(new p.State(source, 1), "\"a\"");
         ok(parse(parser, new p.State(source)).equals(expected));
     });
 
     test("between 3", ()=>{
         var parser = p.between(p.string('['), p.string('a'), p.string(']'));
         var source = "[a]";
-        var expected = p.success(new p.State(source, 3), "a");
+        var expected = p.ok(new p.State(source, 3), "a");
         ok(parse(parser, new p.State(source)).equals(expected));
     });
 
     test("pure 1", ()=>{
         var parser = p.pure("x");
         var source = "abc";
-        var expected = p.success(new p.State(source, 0), "x");
+        var expected = p.ok(new p.State(source, 0), "x");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -302,7 +305,7 @@ module Tests {
     test("eof 1", ()=>{
         var parser = p.eof;
         var source = "";
-        var expected = p.success(new p.State(source, 1),  undefined);
+        var expected = p.ok(new p.State(source, 1),  undefined);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -313,7 +316,7 @@ module Tests {
             return s(p.eof);
         });
         var source = "a";
-        var expected = p.success(new p.State(source, 2),  undefined);
+        var expected = p.ok(new p.State(source, 2),  undefined);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -321,7 +324,7 @@ module Tests {
     test("eof 3", ()=>{
         var parser = p.eof;
         var source = "a";
-        var expected = p.failure(new p.State(source, 0), "end of file");
+        var expected = error(new p.State(source, 0), "end of file");
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -329,7 +332,7 @@ module Tests {
     test("empty 1", ()=>{
         var parser = p.empty;
         var source = "a";
-        var expected = p.success(new p.State(source, 0),  undefined);
+        var expected = p.ok(new p.State(source, 0),  undefined);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -340,7 +343,7 @@ module Tests {
             return i >= 80 && i <= 85;
         })));;
         var source = "PQRRQPOPhoge";
-        var expected = p.success(new p.State(source, 6), 'P,Q,R,R,Q,P');
+        var expected = p.ok(new p.State(source, 6), 'P,Q,R,R,Q,P');
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -351,7 +354,7 @@ module Tests {
             return i >= 80 && i <= 85;
         })));;
         var source = "XXXXXXXXXXXX";
-        var expected = p.failure(new p.State(source), 'one of "PQRSTU"');
+        var expected = error(new p.State(source), 'one of "PQRSTU"');
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -359,7 +362,7 @@ module Tests {
     test("regexp 1", ()=>{
         var parser = p.regexp(/abcde/);
         var source = "abcde";
-        var expected = p.success(new p.State(source, 5), source);
+        var expected = p.ok(new p.State(source, 5), source);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -367,7 +370,7 @@ module Tests {
     test("regexp 2", ()=>{
         var parser = p.regexp(/abc/);
         var source = "xxabcxx";
-        var expected = p.failure(new p.State(source), '/abc/');
+        var expected = error(new p.State(source), '/abc/');
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -375,7 +378,7 @@ module Tests {
     test("regexp 3", ()=>{
         var parser = p.regexp(/a*/);
         var source = "aaaaabbbbb";
-        var expected = p.success(new p.State(source, 5), 'aaaaa');
+        var expected = p.ok(new p.State(source, 5), 'aaaaa');
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -383,7 +386,7 @@ module Tests {
     test("recursive parser 1", ()=>{
         var parser = p.or(p.regexp(/[a-z]/), p.between(p.string("["), p.lazy(()=> parser), p.string("]")));
         var source = "[[[[x]]]]";
-        var expected = p.success(new p.State(source, 9), 'x');
+        var expected = p.ok(new p.State(source, 9), 'x');
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -391,7 +394,7 @@ module Tests {
     test("recursive parser 2", ()=>{
         var parser = p.or(p.regexp(/[a-z]/), p.between(p.string("["), p.lazy(()=> parser), p.string("]")));
         var source = "[[[[x]]]";
-        var expected = p.failure(new p.State(source, 8), '"]"');
+        var expected = error(new p.State(source, 8), '"]"');
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
     });
@@ -406,33 +409,20 @@ module Tests {
         });
 
         var source = "aaaabbbbcccc";
-        var expected = p.success(new p.State(source, 12), [["a", "a", "a", "a"], ["b", "b", "b", "b"], ["c", "c", "c", "c"]]);
+        var expected = p.ok(new p.State(source, 12), [["a", "a", "a", "a"], ["b", "b", "b", "b"], ["c", "c", "c", "c"]]);
         var result = parse(parser, new p.State(source));
         ok(result.equals(expected));
 
         var source2 = "aaaabbbbcc";
-        var expected2 = p.failure(new p.State(source2, 10), "\"c\"");
+        var expected2 = error(new p.State(source2, 10), "\"c\"");
         var result2 = parse(parser, new p.State(source2));
         ok(result2.equals(expected2));
-    });
-
-    test("tag 1", ()=>{
-        var bottom = p.tag("bottom", p.fail("fail"));
-        var layer1 = p.tag("layer1", p.between(p.string("["), bottom, p.string("]")));
-        var layer2 = p.tag("layer2", p.or(p.string("123"), layer1, p.string("567")));
-        var parser = p.tag("top", p.series(p.string("("), layer2, p.string(")")));
-
-        var source = "([xyz])";
-        var expected = p.failure(new p.State(source, 2), "fail");
-        var result = parse(parser, new p.State(source));
-        ok(result.equals(expected));
-        ok(result.failurePath === "top > layer2 > layer1 > bottom");
     });
 
     test("implicit array parser 1", ()=>{
         var parser = ["x", "y", "z"].map(x=>p.string(x));
         var source = "xyz";
-        var expected = p.success(new p.State(source, 3), ["x", "y", "z"]);
+        var expected = p.ok(new p.State(source, 3), ["x", "y", "z"]);
         var result = parse(p.array(parser), new p.State(source));
         ok(result.equals(expected));
     });
@@ -445,7 +435,7 @@ module Tests {
         });
         var source = "Hoge";
         var input = new p.State(source, 0, 42);
-        var expected = p.success(new p.State(source, 4, 84), "Hoge");
+        var expected = p.ok(new p.State(source, 4, 84), "Hoge");
         var result = parse(parser, input);
         ok(result.equals(expected));
     });
@@ -454,9 +444,9 @@ module Tests {
     module OperatorTableTest {
 
         var lexer = p.makeTokenParser({
-            commentStart:       '/*',
-            commentEnd:         '*/',
-            commentLine:        '//',
+            commentStart:       p.string('/*'),
+            commentEnd:         p.string('*/'),
+            commentLine:        p.string('//'),
             nestedComments:     true,
             identStart:         p.regexp(/[_a-zA-Z]/),
             identLetter:        p.regexp(/[_a-zA-Z0-9]/),
@@ -484,7 +474,7 @@ module Tests {
         test("token parser: float", ()=>{
             var source = "42";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 2), 42);
+            var expected = p.ok(new p.State(source, 2), 42);
             var result = parse(lexer.naturalOrFloat, input);
             ok(result.equals(expected));
         });
@@ -492,7 +482,7 @@ module Tests {
         test("token parser: whiteSpace", ()=>{
             var source = "    42";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 4), undefined);
+            var expected = p.ok(new p.State(source, 4), undefined);
             var result = parse(lexer.whiteSpace, input);
             ok(result.equals(expected));
         });
@@ -500,7 +490,7 @@ module Tests {
         test("token parser: reservedOp", ()=>{
             var source = "*  ";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 3), "*");
+            var expected = p.ok(new p.State(source, 3), "*");
             var result = parse(lexer.reservedOp("*"), input);
             ok(result.equals(expected));
         });
@@ -514,7 +504,7 @@ module Tests {
 
             var source = "3*5";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 3), 15);
+            var expected = p.ok(new p.State(source, 3), 15);
             var result = parse(expr, input);
             ok(result.equals(expected));
         });
@@ -529,7 +519,7 @@ module Tests {
 
             var source = "3*5+1";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 5), 16);
+            var expected = p.ok(new p.State(source, 5), 16);
             var result = parse(expr, input);
             ok(result.equals(expected));
         });
@@ -544,7 +534,7 @@ module Tests {
 
             var source = "1+3*5";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 5), 16);
+            var expected = p.ok(new p.State(source, 5), 16);
             var result = parse(expr, input);
             ok(result.equals(expected));
         });
@@ -559,7 +549,7 @@ module Tests {
 
             var source = "(1  +3)*  5";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, 11), 20);
+            var expected = p.ok(new p.State(source, 11), 20);
             var result = parse(expr, input);
             ok(result.equals(expected));
         });
@@ -573,7 +563,7 @@ module Tests {
 
             var source = "7 - 3";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, source.length), eval(source));
+            var expected = p.ok(new p.State(source, source.length), eval(source));
             var result = parse(expr, input);
             ok(result.equals(expected));
         });
@@ -590,7 +580,7 @@ module Tests {
 
             var source = "(7 * 3) + 3 /* comment */ * ((2) - 1) + (-10) * 2";
             var input = new p.State(source, 0);
-            var expected = p.success(new p.State(source, source.length), eval(source));
+            var expected = p.ok(new p.State(source, source.length), eval(source));
             var reply = parse(expr, input);
             ok(reply.equals(expected));
         });
@@ -622,7 +612,7 @@ module Tests {
 
         // Success
         var source = "indexOf(searchString:string,position?:number):number";
-        var expected: p.Reply<SeqTestJsonData,void> = p.success(new p.State(source, source.length),
+        var expected: p.Reply<SeqTestJsonData,void> = p.ok(new p.State(source, source.length),
             {
                 'name': 'indexOf',
                 'args': [

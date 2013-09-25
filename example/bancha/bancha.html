@@ -51,6 +51,9 @@
         <section class="left">
 
 <textarea id="lib" style="display: none;">
+// This is BanchaScript's standard library. 
+// In BanchaScript, all operators are user-defined.
+// You can declare any operators you want.
 operator ++ prefix  1 = "++{0}"; 
 operator -- prefix  1 = "--{0}";
 operator ++ postfix 1 = "{0}++";
@@ -79,31 +82,40 @@ operator := infixl 14 = "{0}={1}";
 
 <textarea id="source">
 
-// 関数の定義
-function log(x){
-
-    // nativeディレクティブ
-    native "console.log(x)";
+//Function declaration. 関数の定義
+function add(x, y){
+    return x + y;
+}
+function sub(x, y){
+    return x - y;
 }
 
-// アロー関数式
+// Native function declaration. ネイティブな関数の定義
+function log(x){
+    native "console.log(x)";    // nativeディレクティブで出力を直接操作
+}
+function foldl(f, x, xs){
+    return native "xs.reduce(f, x)";
+}
+
+// Arrow function expression. アロー関数式
 var double = x => x * 2;
 
-// 演算子を関数に変換
+// 演算子を括弧で囲むと関数になる
 var mul = (*);
 log(mul(5, 6));
 
-// for文
+// For statement. for文
 var m = 0;
 for(var i = 0; i < 10; i++){
     m := m + i;
 }
 log(m);
 
-// 変数の宣言
+// Varialble declaration. 変数の宣言
 var x = 1 + 2 * 3;
 
-// 関数の定義
+// Function declaration. 関数の定義
 function factorial(k){
     // if 文
     if(k < 1){
@@ -113,28 +125,28 @@ function factorial(k){
     }
 }
 
-// 関数呼び出し
+// Function application. 関数呼び出し
 log(factorial(10));
 
-// 演算子の定義
+// Declaration of an operator. 演算子の定義
 operator |^_^|< prefix 5 = log; 
 
-// 演算子の適用
-|^_^|< "わたしです";
+// Operator application. 演算子の適用
+|^_^|< "It's me! わたしです。";
 
-// ネストできるブロックコメント
+// Nest-able multiline comment. ネストできるブロックコメント
 /* This's /* comment */ text. */
 
-// 関数の部分適用 ///////////////////////////
-function add(x, y){
-    return x + y;
-}
+// Function Application 関数の部分適用 
+// Pass the second parameter only. 先にふたつめの引数を渡す
+var f = sub(,10);
 
-// 先にふたつめの引数を渡す
-var f = add(,10);
-
-// 後から残りの引数を渡す
+// Then, pass a first parameter. 後から残りの引数を渡す
 log(f(20));
+
+// Function as infix operator 関数の中置記法
+// Like Haskell, a backquoted identifier is a infix operator.  バッククォートで囲むことで、関数を中置演算子として書くことができます
+log( 100 `add` 200 );
 
 </textarea>
         
@@ -159,11 +171,14 @@ log(f(20));
             
             function compile(){
                 "use strict";
+                var start = performance.now();
                 var scope = new bancha.Scope();
                 var stdlib = bancha.compile(scope, lib.value);
                 var reply = bancha.compile(scope, source.value);
+                var time = (performance.now() - start) * 0.001;
+                var timeString = "time: " + /[0-9]+\.[0-9]{1,2}/.exec(time.toString())[0] + "sec.";
                 if(reply.success){
-                    error.value = "Compiled successfully.";
+                    error.value = "Compiled successfully. \n" + timeString;
                     compiled.value = reply.value;
                     var outputText = "";
                     
@@ -178,8 +193,8 @@ log(f(20));
 
                     output.value = outputText;
                 }else{
-                    var pos = reply.state.rawColumn;
-                    error.value = "(" + (pos.raw + 1) + "," + (pos.column + 1) + "): expected " + reply.expected;
+                    var pos = reply.state.getRowColumn();
+                    error.value = "(" + (pos.raw + 1) + "," + (pos.column + 1) + "): expected " + reply.expected + "\n" + timeString;
                     compiled.value = "";
                     output.value = "";
                 }
