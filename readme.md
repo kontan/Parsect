@@ -9,7 +9,7 @@ I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Pars
 * Parsec-like API
 * Statically typed: The API of Parsect is statically typed like Parsec with TypeScript. However, you can also use it from JavaScript as dynamically typed API.
 * *do-notation* like syntax: Parsect has Haskell's do-notation-like notation style. This notation makes a parser more readable. 
-* Functional Programming API: Most of functions are referential transparency. It means you don't need to consider states of your parsers. 
+* Functional Programming API: Most of functions are referential transparent. It means you don't need to consider states of your parsers. 
 * Easy debugging: You can set a breakpoint in the middle of your parser and watch that the parser consumes the input step-by-step.　 
 * Exitra parsers: Regular expression parser also is supported. You can combine RegExp parsers with other parsers. 
 * Token parser builder: `makeTokenParser` function is supported.
@@ -97,7 +97,7 @@ If calculation for the result value is costly, you should call *success()* funct
 
 ### Predictive Parsers
 
-Here are two parsers. `*pa*` parses `"[a]"` and `*pb*` parses `"[b]"`. A parser `or(pa, pb)` fails to parse `"[b]"`.
+Here are two parsers. `pa` parses `"[a]"` and `pb` parses `"[b]"`. A parser `or(pa, pb)` fails to parse `"[b]"`.
 
     var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
     var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
@@ -277,17 +277,6 @@ Invoke parser with the state.
 
 
 
-
-### Build-in Parsers
-
-#### `eof: Parser<void>`
-
-#### `empty: Parser<void>`
-
-#### `number: Parser<number>`
-
-
-
 ### Error Handling Parser Constructors
 
 #### `fail(message: string): Parser<any>`
@@ -298,19 +287,23 @@ Invoke parser with the state.
 
 ### Primitive Parsers
 
+#### `eof: Parser<void>`
+
+#### `empty: Parser<void>`
+
 #### `label<A>(message: string, p: Parser<A>): Parser<A>`
 
 #### `lookAhead<T>(p: Parser<T>): Parser<T>`
 
-#### `pure<T>(t: T): Parser<T>`
+#### `pure<A>(x: A): Parser<A>`
 
-#### `triable<T>(p: Parser<T>): Parser<T>`
+#### `triable<A>(p: Parser<A>): Parser<A>`
 
-#### `notFollowedBy<T>(p: Parser<T>): Parser<void>`
+#### `notFollowedBy<A>(p: Parser<A>): Parser<void>`
 
-#### `fmap<T,S>(f: (v: T)=>S,   p: Parser<T>): Parser<S>`
+#### `fmap<A,B>(f: (x: A)=>B,   p: Parser<A>): Parser<B>`
 
-#### `lazy<T>(f: ()=>Parser<T>): Parser<T>`
+#### `lazy<A>(f: () => Parser<A>): Parser<A>`
 
 
 

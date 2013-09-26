@@ -35,7 +35,7 @@ module bancha {
             var ops = s(identStart);
             var opl = s(p.many(identLetter));
             s(p.string("`"));
-            return (x: string, y: string)=> "(" + ops + opl + "(" + x + "," + y + "))";
+            return (x: string, y: string)=> "(" + ops + opl.join('') + "(" + x + "," + y + "))";
         })), p.Assoc.None)],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]];
         
         constructor(){
