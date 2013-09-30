@@ -30,32 +30,42 @@ module bancha {
 
     export class Scope {
 
-        opTable: p.Operator<string>[][] = [[p.infix(lexer.lexeme(p.seq(s=>{
-            s(p.string("`"));
-            var ops = s(identStart);
-            var opl = s(p.many(identLetter));
-            s(p.string("`"));
-            return (x: string, y: string)=> "(" + ops + opl.join('') + "(" + x + "," + y + "))";
-        })), p.Assoc.None)],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]];
-        
+        operators: p.OperatorTable<string>[] = [];
+
+        // 演算子の関数化のためのテーブル
+        binaryOps: { [symbol: string]: (x: string, y: string) => string } = {};
+        unaryOps:  { [symbol: string]: (x: string           ) => string } = {};        
+
         constructor(){
+            this.operators[0] = new p.OperatorTable();
+
+            // 関数の中置記法
+            this.operators[0].infix.push(
+                lexer.lexeme(p.seq(s=>{
+                    s(p.string("`"));   // バッククォートの後ろに空白を許可していない
+                    var ops = s(identStart);
+                    var opl = s(p.many(identLetter));
+                    s(p.string("`"));
+                    return (x: string, y: string)=> "(" + ops + opl.join('') + "(" + x + "," + y + "))";
+                }))
+            );            
         }
     }
 
     export function compile(scope: Scope, source: string): p.Reply<string,void> {
 
         // mutable
-        var expression: p.Parser<string> = null;
+        var _expression: p.Parser<string> = null;
 
-        var expr: p.Parser<string> = p.lazy((): p.Parser<string> => {
-            if( ! expression){
-                expression = p.buildExpressionParser(scope.opTable, term);
+        var expression: p.Parser<string> = p.lazy((): p.Parser<string> => {
+            if( ! _expression){
+                var _table = Object.keys(scope.operators).sort().map(k => scope.operators[k]);
+                _expression = p.makeExpressionParser(_table, term);
             }
-            return expression;
+            return _expression;
         });
 
         var term: p.Parser<string> = p.label("term", p.seq((s: p.Context<void>): string =>{
-
 
             var arrowFunctionArgs = p.or(
                 p.fmap((x: string): string[] => [x], lexer.identifier),
@@ -63,7 +73,7 @@ module bancha {
             );
             var arrowFunctionBody = p.or(
                 p.fmap((xs: string[]): string => "{" + xs.join('') + "}", lexer.braces(p.many(statement))),
-                expr
+                expression
             );
             var arrowFunction: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
                 var args: string[] = s(arrowFunctionArgs);
@@ -77,16 +87,19 @@ module bancha {
                 return s(lexer.stringLiteral);
             });
 
-            var functionalOperator: p.Parser<string> = p.fmap((op: string): string => '(function(x,y){return x' + op + 'y})', lexer.parens(lexer.operator));
+            var functionalOperator: p.Parser<string> = p.fmap((op: string): string =>{
+                     if(scope.binaryOps[op]) return '(function(x,y){return ' + scope.binaryOps[op]("x", "y") + '})';
+                else if(scope.unaryOps [op]) return '(function(x){return '   + scope.unaryOps[op]("x") + '})';
+                else throw new Error("Unknown operator: " + op);
+            }, lexer.parens(lexer.operator));
 
-            var arrayLiteral: p.Parser<string> = p.fmap((xs: string[]): string => "[" + xs.join(',') + "]", lexer.brackets(p.sepBy(expr, lexer.comma)));
+            var arrayLiteral: p.Parser<string> = p.fmap((xs: string[]): string => "[" + xs.join(',') + "]", lexer.brackets(p.sepBy(expression, lexer.comma)));
 
-
-            var value: string = s(p.or(
-                p.triable(functionalOperator),
+            var simpleExpression: string = s(p.or(
+                p.triable(functionalOperator),                                          // `演算子`
                 p.triable(arrowFunction),                                               // アロー関数式      
                 arrayLiteral,                                                           // 配列リテラル
-                p.fmap(x => '(' + x + ')', lexer.parens(expr)),                         // ( 式 )
+                p.fmap(x => '(' + x + ')', lexer.parens(expression)),                   // ( 式 )
                 p.fmap(x => '"' + x + '"', lexer.stringLiteral),                        // 文字列リテラル
                 p.fmap(x => x.toString(), lexer.naturalOrFloat),                        // 数値リテラル
                 nativeDirective,                                                        // native ディレクティブ
@@ -94,11 +107,11 @@ module bancha {
             ));
             
             // Function application syntax parser. 関数適用
-            var app: p.Parser<string> = p.fmap(
+            var functionApplication: p.Parser<string> = p.fmap(
                 (args: string[]): string　=>　{
                     if(args.every(x => !!x)){
                         // 通常の関数適用
-                        return value　+　"("　+　args.join(',')　+　")"
+                        return simpleExpression +　"("　+　args.join(',')　+　")"
                     }else{
                         // 関数の部分適用
                         var params: string[] = [];
@@ -112,22 +125,22 @@ module bancha {
                                 params.push(args[i]);
                             }
                         }
-                        return "(function(fn){return function(" + remains.join(',') + "){return fn(" + params.join(',') + ")}}(" + value + "))";
+                        return "(function(fn){return function(" + remains.join(',') + "){return fn(" + params.join(',') + ")}}(" + simpleExpression + "))";
                     }
                 }, 
-                lexer.parens(p.sepBy(p.option(null, expr), lexer.comma))
+                lexer.parens(p.sepBy(p.option(null, expression), lexer.comma))
             ); // 関数呼び出し
             
-            return s(p.option(value, app));
+            return s(p.option(simpleExpression, functionApplication));
         }));
         
-        var exprStatement: p.Parser<string> = p.fmap((e: string): string => e + ";", p.head(expr, lexer.semi));
+        var exprStatement: p.Parser<string> = p.fmap((e: string): string => e + ";", p.head(expression, lexer.semi));
 
         var varExpression: p.Parser<string> = p.seq((s: p.Context<void>): string => {
             s(lexer.reserved("var"));
             var name: string = s(lexer.identifier);
             s(lexer.symbol("="));
-            var e: string = s(expr);
+            var e: string = s(expression);
             return "var " + name + "=" + e;
         });
 
@@ -138,33 +151,46 @@ module bancha {
             return e + ";";
         });
 
-        var returnStatement: p.Parser<string> = p.fmap((e: string): string => "return "+e+";", p.between(lexer.reserved("return"), expr, lexer.semi));
+        var returnStatement: p.Parser<string> = p.fmap((e: string): string => "return "+e+";", p.between(lexer.reserved("return"), expression, lexer.semi));
 
-        var operatorStatement: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
-            function addOperator(unary: (x: string)=>string, binary: (x: string, y: string)=>string): void {
-                var newOperator = type === "prefix"  ? lexer.prefix (op, unary) :
-                                  type === "postfix" ? lexer.postfix(op, unary) :
-                                  lexer.binary(
-                                      op, binary, 
-                                      type === "infixl" ? p.Assoc.Left : 
-                                      type === "infixr" ? p.Assoc.Right : 
-                                      p.Assoc.None
-                                  );
-                scope.opTable[precedence].push(newOperator);
-                expression = null;
-            }
-
+        var operatorStatement: p.Parser<string> = p.seq((s: p.Context<void>): string =>{            
             s(lexer.reserved("operator"));
             var op: string = s(lexer.operator);
             var type = s(p.choice(["infixl", "infixr", "infix", "prefix", "postfix"].map(lexer.reserved)));        
             var precedence = s(lexer.natural);
             s(lexer.symbol("="));
+
+            function addOperator(unary: (x: string)=>string, binary: (x: string, y: string)=>string): void {
+                var table = scope.operators[precedence];
+                if( ! table){
+                    table = new p.OperatorTable();
+                    scope.operators[precedence] = table;
+                }
+                switch(type){
+                    case "infixl" : table.infixl .push(p.fmap(_ => binary, lexer.reservedOp(op))); scope.binaryOps[op] = binary; break;
+                    case "infixr" : table.infixr .push(p.fmap(_ => binary, lexer.reservedOp(op))); scope.binaryOps[op] = binary; break;
+                    case "infix"  : table.infix  .push(p.fmap(_ => binary, lexer.reservedOp(op))); scope.binaryOps[op] = binary; break;
+                    case "prefix" : table.prefix .push(p.fmap(_ => unary , lexer.reservedOp(op))); scope.unaryOps [op] = unary;  break;
+                    case "postfix": table.postfix.push(p.fmap(_ => unary , lexer.reservedOp(op))); scope.unaryOps [op] = unary;  break;                        
+                }
+                _expression = null;
+            }
+
             s(p.or(
-                p.fmap(func =>{ 
-                    addOperator((x)=>[func, "(", x, ")"].join(''), (x,y)=>[func, "(", x, ",", y, ")"].join(''));
+                // Function Alias Operator 
+                p.fmap(func => { 
+                    addOperator(
+                        (x: string           ) => [func, "(", x,         ")"].join(''), 
+                        (x: string, y: string) => [func, "(", x, ",", y, ")"].join('')
+                    );
                 }, lexer.identifier),
-                p.fmap(lit =>{ 
-                    addOperator((x: string)=>lit.replace("{0}", x), (x: string, y: string)=>lit.replace("{0}", x).replace("{1}", y));
+                
+                // Native Operator 
+                p.fmap(lit => { 
+                    addOperator(
+                        (x: string           ) => lit.replace("{0}", x                  ), 
+                        (x: string, y: string) => lit.replace("{0}", x).replace("{1}", y)
+                    );
                 }, lexer.stringLiteral)
             ));
             s(lexer.semi);
@@ -173,7 +199,7 @@ module bancha {
 
         var ifStatement: p.Parser<string> = p.seq(s=>{
             s(lexer.reserved("if"));
-            var condition = s(lexer.parens(expr));
+            var condition = s(lexer.parens(expression));
             var thenClause = s(block);
             var elseClause = s(p.option("", p.seq(s=>{
                 s(lexer.reserved("else"));
@@ -185,11 +211,11 @@ module bancha {
         var forStatement: p.Parser<string> = p.seq(s=>{
             s(lexer.reserved("for"));
             var header = s(lexer.parens(p.seq(s=>{
-                var init = s(p.option("", p.or(varExpression, expr)));
+                var init = s(p.option("", p.or(varExpression, expression)));
                 s(lexer.semi);
-                var cond = s(expr);
+                var cond = s(expression);
                 s(lexer.semi);
-                var next = s(expr);
+                var next = s(expression);
                 return "(" + init + ";" + cond + ";" + next + ")";
             })));
             var body = s(block);
@@ -206,7 +232,7 @@ module bancha {
 
         var statement = p.or(funcStatement, returnStatement, ifStatement, forStatement, varStatement, exprStatement);
 
-        var block = p.or(p.fmap((xs: string[]) => "{" + xs.join('') + "}", lexer.braces(p.many(statement))), expr);
+        var block = p.or(p.fmap((xs: string[]) => "{" + xs.join('') + "}", lexer.braces(p.many(statement))), expression);
 
         var topLevelStatement: p.Parser<string> = p.or(funcStatement, operatorStatement, ifStatement, forStatement, varStatement, exprStatement);
 

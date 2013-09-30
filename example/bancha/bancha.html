@@ -35,13 +35,13 @@
                 background-image: url("tatami01.jpg");
             }
             textarea#error {
-                height: 60px;
+                height: 150px;
             }
             textarea#compiled {
-                height: 100px;
+                height: 150px;
             }
             textarea#output {
-                height: 100px;
+                height: 150px;
             }            
         </style>
     </head>
@@ -61,6 +61,14 @@ operator -- postfix 1 = "{0}--";
 operator -  prefix  1 = "-{0}";
 operator +  prefix  1 = "+{0}";
 
+// Array Operations
+operator :  infixr  1 = "{head:{0},tail:{1}}";
+operator !! infixl  1 = "{0}[{1}]";
+
+// Function Opeations
+operator . infixr   1 = "(function(){return {0}({1}.apply(undefined,arguments))})";
+
+// Numerical operations
 operator *  infixl  2 = "({0}*{1})"; 
 operator /  infixl  2 = "({0}/{1})";
 
@@ -76,11 +84,51 @@ operator == infixl  5 = "({0}=={1})";
 operator != infixl  5 = "({0}!={1})";
 
 operator := infixl 14 = "{0}={1}";
+
+function head(xs){
+    return native "xs.head";
+}
+function tail(xs){
+    return native "xs.tail";
+}
+function length(xs){
+    if(xs == null){
+        return 0;
+    }else{
+        return 1 + length(tail(xs));
+    }
+}
+
+function log(x){
+    native "console.log(x)";    
+}
 </textarea>
 
 
 
 <textarea id="source">
+// Comments //////////////////////////////////////////////////////////////////////////////////////////
+
+// This is a line comment. 行コメント
+
+/*
+This is a block comment. 複数行コメント
+*/
+
+// Nest-able multiline comment. ネストできるブロックコメント
+/* This's /* comment */ text. */
+
+
+
+// Variables //////////////////////////////////////////////////////////////////////////////////////
+
+// Varialble declaration. 変数の宣言
+var x = 1 + 2 * 3;
+
+
+
+
+// Functions ///////////////////////////////////////////////////////////
 
 //Function declaration. 関数の定義
 function add(x, y){
@@ -91,31 +139,66 @@ function sub(x, y){
 }
 
 // Native function declaration. ネイティブな関数の定義
-function log(x){
-    native "console.log(x)";    // nativeディレクティブで出力を直接操作
-}
 function foldl(f, x, xs){
-    return native "xs.reduce(f, x)";
+    return native "xs.reduce(f, x)";    // nativeディレクティブで出力を直接操作
 }
 
 // Arrow function expression. アロー関数式
 var double = x => x * 2;
 
-// 演算子を括弧で囲むと関数になる
+// Infix operator as a function. 演算子を括弧で囲むと関数になる
 var mul = (*);
-log(mul(5, 6));
+log("mul(5, 6) = " + mul(5, 6));
+
+// Function as infix operator 関数の中置記法
+// Like Haskell, a backquoted identifier is a infix operator.  バッククォートで囲むことで、関数を中置演算子として書くことができます
+log( 100 `add` 200 );
+
+// Function Application 関数の部分適用 
+// Pass the second parameter only. 先にふたつめの引数を渡す
+var f = sub(,10);
+
+// Then, pass a first parameter. 後から残りの引数を渡す
+log(f(20));
+
+
+
+// Operators ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Declaration of an operator. 演算子の定義
+operator |^_^|< prefix 5 = log; 
+
+// Operator application. 演算子の適用
+|^_^|< "It's me! わたしです。";
+
+// Operator as a function. 演算子を関数のように扱う
+log("(*)(3,2) = " + (*)(3,2));
+
+// Operator Section. 演算子の片方の辺にのみ適用できる
+log("(* 2)(3) = " + (* 2)(3));
+//log("(2 *)(3) = " + (2 *)(3));
+
+// Arrays //////////////////////////////////////////////////////////////////////////////////////////////
+
+// Array Literal. 配列リテラル
+var xs = [1, 2, 3, 4, 5];
+
+// Accessing to the array with "!!" operator. !! 演算子による配列へのアクセス
+log("xs[2] = " + xs !! 2);
+
+
+
+
+// Control flow ///////////////////////////////////////////////////////////////////////////////////
 
 // For statement. for文
 var m = 0;
 for(var i = 0; i < 10; i++){
     m := m + i;
 }
-log(m);
+log("Sum of {0, 1, ..., 10} = " + m);
 
-// Varialble declaration. 変数の宣言
-var x = 1 + 2 * 3;
-
-// Function declaration. 関数の定義
+// If　statement. If文
 function factorial(k){
     // if 文
     if(k < 1){
@@ -126,27 +209,15 @@ function factorial(k){
 }
 
 // Function application. 関数呼び出し
-log(factorial(10));
+log("factorial(10) = " + factorial(10));
 
-// Declaration of an operator. 演算子の定義
-operator |^_^|< prefix 5 = log; 
 
-// Operator application. 演算子の適用
-|^_^|< "It's me! わたしです。";
+// Lists /////////////////////////////////////////////////////
 
-// Nest-able multiline comment. ネストできるブロックコメント
-/* This's /* comment */ text. */
+var xs = 0 : 1 : 2 : 3 : null;
 
-// Function Application 関数の部分適用 
-// Pass the second parameter only. 先にふたつめの引数を渡す
-var f = sub(,10);
-
-// Then, pass a first parameter. 後から残りの引数を渡す
-log(f(20));
-
-// Function as infix operator 関数の中置記法
-// Like Haskell, a backquoted identifier is a infix operator.  バッククォートで囲むことで、関数を中置演算子として書くことができます
-log( 100 `add` 200 );
+log("length(xs)     = " + length(xs));
+log("head(tail(xs)) = " + head(tail(xs)));
 
 </textarea>
         
@@ -171,33 +242,45 @@ log( 100 `add` 200 );
             
             function compile(){
                 "use strict";
-                var start = performance.now();
-                var scope = new bancha.Scope();
-                var stdlib = bancha.compile(scope, lib.value);
-                var reply = bancha.compile(scope, source.value);
-                var time = (performance.now() - start) * 0.001;
-                var timeString = "time: " + /[0-9]+\.[0-9]{1,2}/.exec(time.toString())[0] + "sec.";
-                if(reply.success){
-                    error.value = "Compiled successfully. \n" + timeString;
-                    compiled.value = reply.value;
-                    var outputText = "";
-                    
-                    (function(){
-                        try{
-                            var console = { log: function(x){ outputText += x + "\n"; }};
-                            eval(reply.value);
-                        }catch(e){
-                            console.log(e);
-                        }
-                    }());
-
-                    output.value = outputText;
-                }else{
-                    var pos = reply.state.getRowColumn();
-                    error.value = "(" + (pos.raw + 1) + "," + (pos.column + 1) + "): expected " + reply.expected + "\n" + timeString;
-                    compiled.value = "";
-                    output.value = "";
+                
+                function compileScript(scope, title, source){
+                    var start = performance.now();
+                    var reply = bancha.compile(scope, source);
+                    var time = (performance.now() - start) * 0.001;
+                    var timeString = "time: " + /[0-9]+(\.[0-9]{1,3})?/.exec(time.toString())[0] + "sec.";
+                    if(reply.success){
+                        error.value += "[" + title + "] Compiled successfully. \n";
+                        error.value += "[" + title + "] " + timeString + "\n";
+                        return reply.value;
+                    }else{
+                        var pos = reply.state.getRowColumn();
+                        error.value += "[" + title + "] (" + (pos.raw + 1) + "," + (pos.column + 1) + "): expected " + reply.expected() + "\n";
+                        error.value += "[" + title + "] " + timeString + "\n";
+                        return "";
+                    }
                 }
+
+                // Initialize fields
+                error.value = "";
+
+                // Compile
+                var compiledText = "";
+                var scope = new bancha.Scope();
+                compiledText += compileScript(scope, "stdlib", lib.value);
+                compiledText += compileScript(scope, "app", source.value);
+                compiled.value = compiledText;
+
+                // Evaluation
+                var outputText = "";
+                (function(){
+                    try{
+                        var console = { log: function(x){ outputText += x + "\n"; }};
+                        eval(compiledText);
+                    }catch(e){
+                        console.log(e);
+                    }
+                }());
+                output.value = outputText;
             }
 
             source.onkeyup = compile;

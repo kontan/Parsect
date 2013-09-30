@@ -151,7 +151,7 @@ module Parsect {
         userState: U;        /// (read/write) Current user state.
         
         // The following properties provided for debugging, you should not use to parsing.
-        peek: string;        /// Current input string.
+        //peek: string;        /// Current input string.
         success: boolean;    /// Success or fail.
     }
 
@@ -661,12 +661,6 @@ module Parsect {
         semiSep1:       <A>(p: Parser<A>)=>Parser<A[]>;
         commaSep:       <A>(p: Parser<A>)=>Parser<A[]>;
         commaSep1:      <A>(p: Parser<A>)=>Parser<A[]>;
-
-
-        // misc 
-        binary:  <A>(name: string, fun: (a: A, b: A)=>A, assoc: Assoc) => Operator<A>;
-        prefix:  <A>(name: string, fun: (a: A)=>A) => Operator<A>;
-        postfix: <A>(name: string, fun: (a: A)=>A) => Operator<A>;
     }
 
     export function makeTokenParser(def: LanguageDef): GenTokenParser {
@@ -1000,18 +994,6 @@ module Parsect {
         var integer        = label("integer", lexeme(int));
         var natural        = label("natural", lexeme(nat));
 
-        // misc 
-        function opBinary<A>(name: string, fun: (a: A, b: A)=>A, assoc: Assoc): Operator<A> {
-            return infix(fmap(_=>fun, reservedOp(name)), assoc);
-        }
-        function opPrefix<A>(name: string, fun: (a: A)=>A): Operator<A> {
-            return prefix(fmap(_=>fun, reservedOp(name)));
-        }
-        function opPostfix<A>(name: string, fun: (a: A)=>A): Operator<A> {
-            return postfix(fmap(_=>fun, reservedOp(name)));
-        }
-
-
         return {
             identifier: identifier,
             reserved: reserved,
@@ -1044,12 +1026,7 @@ module Parsect {
             semiSep: semiSep,
             semiSep1: semiSep1,
             commaSep: commaSep,
-            commaSep1: commaSep1,
-
-
-            binary: opBinary,
-            prefix: opPrefix,
-            postfix: opPostfix
+            commaSep1: commaSep1
         };
     }
     
@@ -1067,6 +1044,9 @@ module Parsect {
     // Expression Parser (Text.Parsec.Expr) /////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+    // Parsec-compatible interface
 
     export enum Assoc {
         None,
@@ -1116,18 +1096,43 @@ module Parsect {
     }
 
     export function buildExpressionParser<A>(operatorTable: Operator<A>[][], simpleExpr: Parser<A>): Parser<A> {
-        return operatorTable.reduce((term: Parser<A>, ops: Operator<A>[])=>{
+        return makeExpressionParser(operatorTable.map((ops: Operator<A>[])=>{
             var rassoc:  RAssoc <A>[] = <RAssoc <A>[]> ops.filter(op => op instanceof RAssoc );
             var lassoc:  LAssoc <A>[] = <LAssoc <A>[]> ops.filter(op => op instanceof LAssoc );
             var nassoc:  NAssoc <A>[] = <NAssoc <A>[]> ops.filter(op => op instanceof NAssoc );
             var prefix:  Prefix <A>[] = <Prefix <A>[]> ops.filter(op => op instanceof Prefix );
             var postfix: Postfix<A>[] = <Postfix<A>[]> ops.filter(op => op instanceof Postfix);
-            
-            var rassocOp  = choice(rassoc .map(r=>r.p))
-            var lassocOp  = choice(lassoc .map(r=>r.p));
-            var nassocOp  = choice(nassoc .map(r=>r.p));
-            var prefixOp  = choice(prefix .map(r=>r.p));
-            var postfixOp = choice(postfix.map(r=>r.p));
+            return new OperatorTable(
+                rassoc .map(r=>r.p),
+                lassoc .map(r=>r.p),
+                nassoc .map(r=>r.p),
+                prefix .map(r=>r.p),
+                postfix.map(r=>r.p)
+            );
+        }), simpleExpr);
+    }
+
+
+
+    // Parsect internal interface
+
+    export class OperatorTable<A> {
+        constructor(
+            public infixr:  Parser<(l: A, r: A) => A>[] = [],
+            public infixl:  Parser<(l: A, r: A) => A>[] = [],
+            public infix:   Parser<(l: A, r: A) => A>[] = [],
+            public prefix:  Parser<(a: A      ) => A>[] = [],
+            public postfix: Parser<(a: A      ) => A>[] = []
+        ){ }        
+    }
+
+    export function makeExpressionParser<A>(table: OperatorTable<A>[], simpleExpr: Parser<A>): Parser<A> {
+        return table.reduce((term: Parser<A>, ops: OperatorTable<A>)=>{            
+            var rassocOp  = choice(ops.infixr);
+            var lassocOp  = choice(ops.infixl);
+            var nassocOp  = choice(ops.infix);
+            var prefixOp  = choice(ops.prefix);
+            var postfixOp = choice(ops.postfix);
 
             function ambigious(assoc: string, op: any){
                 return triable(seq(s=>{
@@ -1137,8 +1142,8 @@ module Parsect {
             }
 
             var ambigiousRight    = ambigious("right", rassocOp);
-            var ambigiousLeft     = ambigious("left", lassocOp);
-            var ambigiousNon      = ambigious("non", nassocOp);
+            var ambigiousLeft     = ambigious("left",  lassocOp);
+            var ambigiousNon      = ambigious("non",   nassocOp);
 
             var termP = seq(s=>{
                 var pre  = s(prefixP);

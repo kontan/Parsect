@@ -955,23 +955,6 @@ var Parsect;
         var integer = label("integer", lexeme(int));
         var natural = label("natural", lexeme(nat));
 
-        // misc
-        function opBinary(name, fun, assoc) {
-            return infix(fmap(function (_) {
-                return fun;
-            }, reservedOp(name)), assoc);
-        }
-        function opPrefix(name, fun) {
-            return prefix(fmap(function (_) {
-                return fun;
-            }, reservedOp(name)));
-        }
-        function opPostfix(name, fun) {
-            return postfix(fmap(function (_) {
-                return fun;
-            }, reservedOp(name)));
-        }
-
         return {
             identifier: identifier,
             reserved: reserved,
@@ -1001,10 +984,7 @@ var Parsect;
             semiSep: semiSep,
             semiSep1: semiSep1,
             commaSep: commaSep,
-            commaSep1: commaSep1,
-            binary: opBinary,
-            prefix: opPrefix,
-            postfix: opPostfix
+            commaSep1: commaSep1
         };
     }
     Parsect.makeTokenParser = makeTokenParser;
@@ -1014,6 +994,7 @@ var Parsect;
     // Expression Parser (Text.Parsec.Expr) /////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Parsec-compatible interface
     (function (Assoc) {
         Assoc[Assoc["None"] = 0] = "None";
         Assoc[Assoc["Left"] = 1] = "Left";
@@ -1075,7 +1056,7 @@ var Parsect;
     Parsect.postfix = postfix;
 
     function buildExpressionParser(operatorTable, simpleExpr) {
-        return operatorTable.reduce(function (term, ops) {
+        return makeExpressionParser(operatorTable.map(function (ops) {
             var rassoc = ops.filter(function (op) {
                 return op instanceof RAssoc;
             });
@@ -1091,22 +1072,46 @@ var Parsect;
             var postfix = ops.filter(function (op) {
                 return op instanceof Postfix;
             });
+            return new OperatorTable(rassoc.map(function (r) {
+                return r.p;
+            }), lassoc.map(function (r) {
+                return r.p;
+            }), nassoc.map(function (r) {
+                return r.p;
+            }), prefix.map(function (r) {
+                return r.p;
+            }), postfix.map(function (r) {
+                return r.p;
+            }));
+        }), simpleExpr);
+    }
+    Parsect.buildExpressionParser = buildExpressionParser;
 
-            var rassocOp = choice(rassoc.map(function (r) {
-                return r.p;
-            }));
-            var lassocOp = choice(lassoc.map(function (r) {
-                return r.p;
-            }));
-            var nassocOp = choice(nassoc.map(function (r) {
-                return r.p;
-            }));
-            var prefixOp = choice(prefix.map(function (r) {
-                return r.p;
-            }));
-            var postfixOp = choice(postfix.map(function (r) {
-                return r.p;
-            }));
+    // Parsect internal interface
+    var OperatorTable = (function () {
+        function OperatorTable(infixr, infixl, infix, prefix, postfix) {
+            if (typeof infixr === "undefined") { infixr = []; }
+            if (typeof infixl === "undefined") { infixl = []; }
+            if (typeof infix === "undefined") { infix = []; }
+            if (typeof prefix === "undefined") { prefix = []; }
+            if (typeof postfix === "undefined") { postfix = []; }
+            this.infixr = infixr;
+            this.infixl = infixl;
+            this.infix = infix;
+            this.prefix = prefix;
+            this.postfix = postfix;
+        }
+        return OperatorTable;
+    })();
+    Parsect.OperatorTable = OperatorTable;
+
+    function makeExpressionParser(table, simpleExpr) {
+        return table.reduce(function (term, ops) {
+            var rassocOp = choice(ops.infixr);
+            var lassocOp = choice(ops.infixl);
+            var nassocOp = choice(ops.infix);
+            var prefixOp = choice(ops.prefix);
+            var postfixOp = choice(ops.postfix);
 
             function ambigious(assoc, op) {
                 return triable(seq(function (s) {
@@ -1173,7 +1178,7 @@ var Parsect;
             });
         }, simpleExpr);
     }
-    Parsect.buildExpressionParser = buildExpressionParser;
+    Parsect.makeExpressionParser = makeExpressionParser;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
