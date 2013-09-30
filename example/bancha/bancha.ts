@@ -95,17 +95,42 @@ module bancha {
 
             var arrayLiteral: p.Parser<string> = p.fmap((xs: string[]): string => "[" + xs.join(',') + "]", lexer.brackets(p.sepBy(expression, lexer.comma)));
 
-            var simpleExpression: string = s(p.or(
+            var rightSection: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
+                s(lexer.symbol("("));
+                var op = s(lexer.operator);
+                var e = s(simpleExpressionParser);
+                s(lexer.symbol(")"));
+                if(scope.binaryOps[op]){
+                    return "(function(x){return " + scope.binaryOps[op]("x", e) + "})";
+                }
+            });
+
+            var leftSection: p.Parser<string> = p.seq((s: p.Context<void>): string =>{
+                s(lexer.symbol("("));
+                var e = s(simpleExpressionParser);
+                var op = s(lexer.operator);
+                s(lexer.symbol(")"));
+                if(scope.binaryOps[op]){
+                    return "(function(x){return " + scope.binaryOps[op](e, "x") + "})";
+                }
+            });
+
+            var simpleExpressionParser: p.Parser<string> = p.or(
                 p.triable(functionalOperator),                                          // `演算子`
                 p.triable(arrowFunction),                                               // アロー関数式      
                 arrayLiteral,                                                           // 配列リテラル
+                p.triable(rightSection),
+                p.triable(leftSection),
                 p.fmap(x => '(' + x + ')', lexer.parens(expression)),                   // ( 式 )
                 p.fmap(x => '"' + x + '"', lexer.stringLiteral),                        // 文字列リテラル
                 p.fmap(x => x.toString(), lexer.naturalOrFloat),                        // 数値リテラル
                 nativeDirective,                                                        // native ディレクティブ
                 lexer.identifier                                                        // 識別子
-            ));
-            
+            );
+
+
+            var simpleExpression: string = s(simpleExpressionParser);
+
             // Function application syntax parser. 関数適用
             var functionApplication: p.Parser<string> = p.fmap(
                 (args: string[]): string　=>　{
@@ -222,7 +247,7 @@ module bancha {
             return "for" + header + body;
         });
 
-        var funcStatement = p.seq((s: p.Context<void>)=>{
+        var functionStatement = p.seq((s: p.Context<void>)=>{
             s(lexer.reserved("function"));
             var name: string = s(lexer.identifier);
             var args: string[] = s(lexer.parens(p.sepBy(lexer.identifier, lexer.comma)));
@@ -230,15 +255,22 @@ module bancha {
             return s.success && ["function ", name, "(", args.join(','), "){", body.join(""), "}"].join('');
         });
 
-        var statement = p.or(funcStatement, returnStatement, ifStatement, forStatement, varStatement, exprStatement);
+        var statement = p.or(functionStatement, returnStatement, ifStatement, forStatement, varStatement, exprStatement);
 
         var block = p.or(p.fmap((xs: string[]) => "{" + xs.join('') + "}", lexer.braces(p.many(statement))), expression);
 
-        var topLevelStatement: p.Parser<string> = p.or(funcStatement, operatorStatement, ifStatement, forStatement, varStatement, exprStatement);
+        var topLevelStatement: p.Parser<string> = p.or(functionStatement, operatorStatement, ifStatement, forStatement, varStatement, exprStatement);
 
+        // スクリプト全体を解析するパーサ
         var script: p.Parser<string> = p.between(
+            // パーサは常にトークンの直前で停止しているものとします。
+            // 最初のトークンの直前まで空白を読み飛ばします
             lexer.whiteSpace, 
+            
+            // スクリプト本体の構文解析
             p.fmap((xs: string[])=>xs.join(''), p.many(topLevelStatement)), 
+            
+            // 入力の終端を確認するために、eof を使います。
             p.eof
         );
 

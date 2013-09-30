@@ -154,7 +154,7 @@ log("mul(5, 6) = " + mul(5, 6));
 // Like Haskell, a backquoted identifier is a infix operator.  バッククォートで囲むことで、関数を中置演算子として書くことができます
 log( 100 `add` 200 );
 
-// Function Application 関数の部分適用 
+// Partial Application of Function 関数の部分適用 
 // Pass the second parameter only. 先にふたつめの引数を渡す
 var f = sub(,10);
 
@@ -174,9 +174,13 @@ operator |^_^|< prefix 5 = log;
 // Operator as a function. 演算子を関数のように扱う
 log("(*)(3,2) = " + (*)(3,2));
 
-// Operator Section. 演算子の片方の辺にのみ適用できる
+// Section, Partial application of operators. 演算子の片方の辺にのみ適用できる
 log("(* 2)(3) = " + (* 2)(3));
-//log("(2 *)(3) = " + (2 *)(3));
+log("(2 *)(3) = " + (2 *)(3));
+
+// Note: (+ 1 * 1) is valid in Haskell, however, in BanchaScript, you need to write it as (+ (1 * 1))
+// 注意: Haskell では　(+ 1 * 1) のように書けますが、BanchaScriptでは (+ (1 * 1)) のように括弧で囲む必要があります(パーサの都合) 
+log( (+ (1 * 1))(4) );
 
 // Arrays //////////////////////////////////////////////////////////////////////////////////////////////
 
