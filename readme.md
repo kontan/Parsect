@@ -4,7 +4,7 @@
 
 **Parsect** is a parser combinator library for [TypeScript](http://www.typescriptlang.org/) or JavaScript. It provides a easy way to write a readable parser in only TypeScript/JavaScript without any other domain-specific languages like yacc/lex, ANTLR or PEG.js. Parsect can be used from not only TypeScript and JavaScript but also other [AltJS](http://altjs.org/)s.
 
-I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Parsec) parser combinator library in Haskell, however this is not a porting of Parsec. Unfortunately, this library doesn't have underlying Monad or Fanctor and it doesn't deal a string as a list of charactor. However, you can combine parsers in the same manner as Parsec with Parsect. 
+I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Parsec) parser combinator library in Haskell, however this is not a porting of Parsec. Unfortunately, this library doesn't have underlying Monad or Fanctor and it doesn't deal a string as a list of character. However, you can combine parsers in the same manner as Parsec with Parsect. 
 
 * Parsec-like API
 * Statically typed: The API of Parsect is statically typed like Parsec with TypeScript. However, you can also use it from JavaScript as dynamically typed API.
@@ -28,7 +28,7 @@ Parsect has some functions that creates a parser. `string` function is one of th
     var reply: Parsect.Reply<string,void> = Parsect.parse(parser, state);
     console.log(reply.value);   // prints "apple".
 
-Note a difference from `string` in Parsec. If the parser recieve a unexpected input string like `"application"`, the parser would consume no charactors and fail. The both two words have first four letter `"appl"` but the parser don't throw a exception and parsing would continue to search other matchings. 
+Note a difference from `string` in Parsec. If the parser recieve a unexpected input string like `"application"`, the parser would consume no characters and fail. The both two words have first four letter `"appl"` but the parser don't throw a exception and parsing would continue to search other matchings. 
 
 ### `many` Parser Combinator
 
@@ -309,7 +309,7 @@ Invoke parser with the state.
 
 
 
-### Charactor Parsers
+### Character Parsers
 
 #### `oneOf(chars: string): Parser<string>`
 
@@ -341,7 +341,7 @@ Invoke parser with the state.
 
 #### `anyChar:  Parser<string>`
 
-#### `satisfy(condition: (charactor: string, code: number)=>boolean): Parser<string>`
+#### `satisfy(condition: (character: string, code: number)=>boolean): Parser<string>`
 
 #### `charCode(charCode: number): Parser<string>`
 
