@@ -23,10 +23,12 @@ I got the idea for Parsect from [Parsec](http://www.haskell.org/haskellwiki/Pars
 
 Parsect has some functions that creates a parser. `string` function is one of them. `string` take a string and return new parser. This parser parses the string and return it as a raw result value. For example, if you want to parse a string "apple", use *string* function as follows:
 
-    var parser: Parsect.Parser<string> = Parsect.string("apple");
-    var state: Parsect.State<void> = Parsect.state("apple, grape, banana", 0);
-    var reply: Parsect.Reply<string,void> = Parsect.parse(parser, state);
-    console.log(reply.value);   // prints "apple".
+```ts
+var parser: Parsect.Parser<string> = Parsect.string("apple");
+var state: Parsect.State<void> = Parsect.state("apple, grape, banana", 0);
+var reply: Parsect.Reply<string,void> = Parsect.parse(parser, state);
+console.log(reply.value);   // prints "apple".
+```
 
 Note a difference from `string` in Parsec. If the parser recieve a unexpected input string like `"application"`, the parser would consume no charactors and fail. The both two words have first four letter `"appl"` but the parser don't throw a exception and parsing would continue to search other matchings. 
 
@@ -34,19 +36,23 @@ Note a difference from `string` in Parsec. If the parser recieve a unexpected in
 
 Combinator is a function takes parsers as a parameter and returns new parser. **many** combinator create a parser parses infinitely repeat of a string pattern. *many* function takes a parser and return new parser. For example, the following parser comsumes a string like "abcabcabcabc...":
 
-    Parsect.many(Parsect.string("abc"))
+```ts
+Parsect.many(Parsect.string("abc"))
+```
 
 ### `seq` Parser Combinator
 
 `seq` combinator provides **do notaion** like notaion for Parsect. `seq` function take a other function for parameter. The parameter function is called back when the *seq* parses a string. The parameter function recieves a other function as a parameter. Typically, *seq* function is used as: 
 
-    var parser: Parsect.Parser<number> = Parsect.seq((s: Parsect.Context<void>): number => {
-        s(string("("));
-        var v: number = s(number);
-        s(string(")"));
-        return v;
-    });
-
+```ts
+var parser: Parsect.Parser<number> = Parsect.seq((s: Parsect.Context<void>): number => {
+    s(string("("));
+    var v: number = s(number);
+    s(string(")"));
+    return v;
+});
+```
+    
 This parser parses a numeric string between parenses. The argument `s` is a function takes a parser and execute it. A return value of `s(number)` is not a `Parsect.State` object but a **raw value** of result of parsing. So, the variable `v` would be bounded a `string` object. When `p` parses a string `"(100)"`, `v` is `100`. 
 
 If a parser applied to `s` failed, all following parsers would be ignore. 
@@ -55,29 +61,22 @@ When the parsing succeeded, `seq` returns a State object contains the value retu
 
 If calculation for the result value is costly, you should call *success()* function and avoid the calculation as follows:
 
-    var parser: Parsect.Parser<number> = Parsect.seq((s: Parsect.Context<void>)=>{
-        s(string("("));
-        var v: number = s(number);
-        s(string(")"));
-        return s.success && very_very_large_operation(v);
-    });
+```ts
+var parser: Parsect.Parser<number> = Parsect.seq((s: Parsect.Context<void>)=>{
+    s(string("("));
+    var v: number = s(number);
+    s(string(")"));
+    return s.success && very_very_large_operation(v);
+});
+```
 
 ### `or` combinator
 
 `or` combinator takes some parsers as parameter and try parsing in sequence. If one of them could parse the input, the State object would be returned. For example, the following parser will consume any combination of "a" or "b":
 
-    Parsect.many(Parsect.or(Parsect.string("a"), Parsect.string("b")));
-
-
-
-
-
-
-
-
-
-
-
+```ts
+Parsect.many(Parsect.or(Parsect.string("a"), Parsect.string("b")));
+```
 
 ## Common Pitfall
 
@@ -99,42 +98,42 @@ If calculation for the result value is costly, you should call *success()* funct
 
 Here are two parsers. `pa` parses `"[a]"` and `pb` parses `"[b]"`. A parser `or(pa, pb)` fails to parse `"[b]"`.
 
-    var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
-    var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
-    var parser = Parsect.or(pa, pb);
+```ts
+var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
+var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
+var parser = Parsect.or(pa, pb);
 
-    var state = Parsect.state("(b)", 0);
-    var reply = Parsect.parse(parser, state);
-    console.log(reply.success);                 // prints "false"!
+var state = Parsect.state("(b)", 0);
+var reply = Parsect.parse(parser, state);
+console.log(reply.success);                 // prints "false"!
+```
 
 It's because `pa` consumes `"["` even if whole of `pa` failed. Generally, commonalizing `"["` of both of parsers is the best way. 
 
-    var pa = Parsect.series(Parsect.string('a'), Parsect.string(']'));
-    var pb = Parsect.series(Parsect.string('b'), Parsect.string(']'));
-    var parser  = Parsect.seq(s=>{
-        s(string('['));
-        return s(Parsect.or(pa, pb));
-    });
+```ts
+var pa = Parsect.series(Parsect.string('a'), Parsect.string(']'));
+var pb = Parsect.series(Parsect.string('b'), Parsect.string(']'));
+var parser  = Parsect.seq(s=>{
+    s(string('['));
+    return s(Parsect.or(pa, pb));
+});
 
-    var state = Parsect.state("(b)", 0);
-    var reply = Parsect.parse(parser, state);
-    console.log(reply.success);                 // prints "true"!
+var state = Parsect.state("(b)", 0);
+var reply = Parsect.parse(parser, state);
+console.log(reply.success);                 // prints "true"!
+```
 
 However, if commonalizing is difficult, you can use `triable` combinator to solve it. `triable` parser can retrieve overconsumed strings.
 
-    var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
-    var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
-    var parser = Parsect.or(Parsect.triable(pa), pb);
+```ts
+var pa = Parsect.between(Parsect.string('['), Parsect.string('a'), Parsect.string(']'));
+var pb = Parsect.between(Parsect.string('['), Parsect.string('b'), Parsect.string(']'));
+var parser = Parsect.or(Parsect.triable(pa), pb);
 
-    var state = Parsect.state("(b)", 0);
-    var reply = Parsect.parse(parser, state);
-    console.log(reply.success);                 // prints "true"!
-
-
-
-
-
-
+var state = Parsect.state("(b)", 0);
+var reply = Parsect.parse(parser, state);
+console.log(reply.success);                 // prints "true"!
+```
 
 
 ## APIs
@@ -165,7 +164,9 @@ However, if commonalizing is difficult, you can use `triable` combinator to solv
 
 #### `class Reply` 
 
-    class Reply<A,U>
+```ts
+class Reply<A,U>
+```
 
 ##### Type Variables
 
@@ -206,26 +207,28 @@ However, if commonalizing is difficult, you can use `triable` combinator to solv
 
 Invoke parser with the state.
 
-    // parser parses "abc" between "[" and "]".
-    var parser: Parsect.State<string> = Parsect.between(
-        Parsect.string("["),
-        Parsect.string("abc"),
-        Parsect.string("]")
-    );
+```ts
+// parser parses "abc" between "[" and "]".
+var parser: Parsect.State<string> = Parsect.between(
+    Parsect.string("["),
+    Parsect.string("abc"),
+    Parsect.string("]")
+);
 
-    var state: Parsect.State<void> = Parsect.state("[abc]", 0);
-    var reply: Reply<void> = Parsect.parse(parser, state);
-    console.log(reply.success);             // true
-    console.log(reply.value);               // "abc"
-    console.log(reply.state.source);        // "[abc]"
-    console.log(reply.state.position);      // 5
+var state: Parsect.State<void> = Parsect.state("[abc]", 0);
+var reply: Reply<void> = Parsect.parse(parser, state);
+console.log(reply.success);             // true
+console.log(reply.value);               // "abc"
+console.log(reply.state.source);        // "[abc]"
+console.log(reply.state.position);      // 5
 
-    var state2: Parsect.State<void> = Parsect.state("[xyz]", 0);
-    var reply2: Reply<void> = Parsect.parse(parser, state);
-    console.log(reply2.success);             // false
-    console.log(reply2.expected);            // "abc"
-    console.log(reply2.state.source);        // "[abc]"
-    console.log(reply2.state.position);      // 1    (It's because the parser consume heading "[" then failed)
+var state2: Parsect.State<void> = Parsect.state("[xyz]", 0);
+var reply2: Reply<void> = Parsect.parse(parser, state);
+console.log(reply2.success);             // false
+console.log(reply2.expected);            // "abc"
+console.log(reply2.state.source);        // "[abc]"
+console.log(reply2.state.position);      // 1    (It's because the parser consume heading "[" then failed)
+```
 
 ----
 
